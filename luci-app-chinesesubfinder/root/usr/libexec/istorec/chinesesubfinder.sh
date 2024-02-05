@@ -29,7 +29,7 @@ do_install() {
      --log-driver \"json-file\" \
      --log-opt \"max-size=100m\" "
 
-  local tz="`uci get system.@system[0].zonename`"
+  local tz="`uci get system.@system[0].zonename | sed 's/ /_/g'`"
   [ -z "$tz" ] || cmd="$cmd -e TZ=$tz"
 
   [ -z "$media" ] || cmd="$cmd -v \"$media:/media\""
@@ -69,8 +69,7 @@ case ${ACTION} in
     docker ps --all -f 'name=chinesesubfinder' --format '{{.State}}'
   ;;
   "port")
-    local http_port=`uci get chinesesubfinder.@main[0].http_port 2>/dev/null`
-    echo $http_port
+    uci -q get chinesesubfinder.@main[0].http_port 2>/dev/null
   ;;
   *)
     usage

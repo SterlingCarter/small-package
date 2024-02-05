@@ -15,16 +15,16 @@ del_lock() {
 
 SERVER_FILE="/tmp/yaml_servers.yaml"
 PROXY_PROVIDER_FILE="/tmp/yaml_provider.yaml"
-servers_if_update=$(uci get openclash.config.servers_if_update 2>/dev/null)
-config_auto_update=$(uci get openclash.config.auto_update 2>/dev/null)
-CONFIG_FILE=$(uci get openclash.config.config_path 2>/dev/null)
+servers_if_update=$(uci -q get openclash.config.servers_if_update)
+config_auto_update=$(uci -q get openclash.config.auto_update)
+CONFIG_FILE=$(uci -q get openclash.config.config_path)
 CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
-UPDATE_CONFIG_FILE=$(uci get openclash.config.config_update_path 2>/dev/null)
+UPDATE_CONFIG_FILE=$(uci -q get openclash.config.config_update_path)
 UPDATE_CONFIG_NAME=$(echo "$UPDATE_CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
-UCI_DEL_LIST="uci del_list openclash.config.new_servers_group"
-UCI_ADD_LIST="uci add_list openclash.config.new_servers_group"
-UCI_SET="uci set openclash.config."
-MIX_PROXY=$(uci get openclash.config.mix_proxies 2>/dev/null)
+UCI_DEL_LIST="uci -q del_list openclash.config.new_servers_group"
+UCI_ADD_LIST="uci -q add_list openclash.config.new_servers_group"
+UCI_SET="uci -q set openclash.config."
+MIX_PROXY=$(uci -q get openclash.config.mix_proxies)
 servers_name="/tmp/servers_name.list"
 proxy_provider_name="/tmp/provider_name.list"
 set_lock
@@ -35,8 +35,14 @@ if [ ! -z "$UPDATE_CONFIG_FILE" ]; then
 fi
 
 if [ -z "$CONFIG_FILE" ]; then
-	CONFIG_FILE="/etc/openclash/config/$(ls -lt /etc/openclash/config/ | grep -E '.yaml|.yml' | head -n 1 |awk '{print $9}')"
-	CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
+  for file_name in /etc/openclash/config/*
+   do
+      if [ -f "$file_name" ]; then
+         CONFIG_FILE=$file_name
+         CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
+         break
+      fi
+   done
 fi
 
 if [ -z "$CONFIG_NAME" ]; then
@@ -55,7 +61,7 @@ yml_other_rules_del()
    if [ "$enabled" = "0" ] || [ "$config" != "$2" ] || [ "$rule_name" != "$3" ]; then
       return
    else
-      uci set openclash."$section".enabled=0 2>/dev/null
+      uci -q set openclash."$section".enabled=0
    fi
 }
 #写入代理集到配置文件
@@ -285,7 +291,19 @@ yml_servers_set()
    config_get "udp_over_tcp" "$section" "udp_over_tcp" ""
    config_get "reality_public_key" "$section" "reality_public_key" ""
    config_get "reality_short_id" "$section" "reality_short_id" ""
-   
+   config_get "obfs_version_hint" "$section" "obfs_version_hint" ""
+   config_get "obfs_restls_script" "$section" "obfs_restls_script" ""
+   config_get "multiplex" "$section" "multiplex" ""
+   config_get "multiplex_protocol" "$section" "multiplex_protocol" ""
+   config_get "multiplex_max_connections" "$section" "multiplex_max_connections" ""
+   config_get "multiplex_min_streams" "$section" "multiplex_min_streams" ""
+   config_get "multiplex_max_streams" "$section" "multiplex_max_streams" ""
+   config_get "multiplex_padding" "$section" "multiplex_padding" ""
+   config_get "multiplex_statistic" "$section" "multiplex_statistic" ""
+   config_get "multiplex_only_tcp" "$section" "multiplex_only_tcp" ""
+   config_get "other_parameters" "$section" "other_parameters" ""
+   config_get "hysteria_obfs_password" "$section" "hysteria_obfs_password" ""
+
    if [ "$enabled" = "0" ]; then
       return
    fi
@@ -337,15 +355,13 @@ yml_servers_set()
    fi
    LOG_OUT "Start Writing【$CONFIG_NAME - $type - $name】Proxy To Config File..."
    
-   if [ "$cipher_ssr" == "none" ]; then
-      cipher_ssr="dummy"
-   fi
-   
    if [ "$obfs" != "none" ] && [ -n "$obfs" ]; then
       if [ "$obfs" = "websocket" ]; then
          obfss="plugin: v2ray-plugin"
       elif [ "$obfs" = "shadow-tls" ]; then
         obfss="plugin: shadow-tls"
+      elif [ "$obfs" = "restls" ]; then
+        obfss="plugin: restls"
       else
          obfss="plugin: obfs"
       fi
@@ -418,7 +434,7 @@ cat >> "$SERVER_FILE" <<-EOF
     $obfss
     plugin-opts:
 EOF
-    if [ "$obfs" != "shadow-tls" ]; then
+    if [ "$obfs" != "shadow-tls" ] && [ "$obfs" != "restls" ]; then
 cat >> "$SERVER_FILE" <<-EOF
       mode: $obfs
 EOF
@@ -431,12 +447,29 @@ EOF
         if [  "$obfss" = "plugin: shadow-tls" ]; then
            if [ ! -z "$obfs_password" ]; then
 cat >> "$SERVER_FILE" <<-EOF
-      password: $obfs_password
+      password: "$obfs_password"
 EOF
            fi
            if [ ! -z "$fingerprint" ]; then
 cat >> "$SERVER_FILE" <<-EOF
       fingerprint: "$fingerprint"
+EOF
+           fi
+        fi
+        if [  "$obfss" = "plugin: restls" ]; then
+           if [ ! -z "$obfs_password" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+      password: "$obfs_password"
+EOF
+           fi
+           if [ ! -z "$obfs_version_hint" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+      version-hint: "$obfs_version_hint"
+EOF
+           fi
+           if [ ! -z "$obfs_restls_script" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+      restls-script: "$obfs_restls_script"
 EOF
            fi
         fi
@@ -876,6 +909,75 @@ EOF
       fi
    fi
 
+#hysteria2
+   if [ "$type" = "hysteria2" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+  - name: "$name"
+    type: $type
+    server: "$server"
+    port: $port
+    password: "$password"
+EOF
+      if [ -n "$hysteria_up" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    up: "$hysteria_up"
+EOF
+      fi
+      if [ -n "$hysteria_down" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    down: "$hysteria_down"
+EOF
+      fi
+      if [ -n "$skip_cert_verify" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    skip-cert-verify: $skip_cert_verify
+EOF
+      fi
+      if [ -n "$sni" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    sni: "$sni"
+EOF
+      fi
+      if [ -n "$hysteria_alpn" ]; then
+         if [ -z "$(echo $hysteria_alpn |grep ' ')" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    alpn: 
+      - "$hysteria_alpn"
+EOF
+         else
+cat >> "$SERVER_FILE" <<-EOF
+    alpn:
+EOF
+      config_list_foreach "$section" "hysteria_alpn" set_alpn
+         fi
+      fi
+      if [ -n "$hysteria_obfs" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    obfs: "$hysteria_obfs"
+EOF
+      fi
+      if [ -n "$hysteria_obfs_password" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    obfs-password: "$hysteria_obfs_password"
+EOF
+      fi
+      if [ -n "$hysteria_ca" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    ca: "$hysteria_ca"
+EOF
+      fi
+      if [ -n "$hysteria_ca_str" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    ca-str: "$hysteria_ca_str"
+EOF
+      fi
+      if [ -n "$fingerprint" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    fingerprint: "$fingerprint"
+EOF
+      fi
+   fi
+
 #vless
    if [ "$type" = "vless" ]; then
 cat >> "$SERVER_FILE" <<-EOF
@@ -1184,6 +1286,49 @@ cat >> "$SERVER_FILE" <<-EOF
 EOF
    fi
 
+#Multiplex
+   if [ ! -z "$multiplex" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    smux:
+      enabled: $multiplex
+EOF
+      if [ -n "$multiplex_protocol" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    protocol: $multiplex_protocol
+EOF
+      fi
+      if [ -n "$multiplex_max_connections" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    max-connections: $multiplex_max_connections
+EOF
+      fi
+      if [ -n "$multiplex_min_streams" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    min-streams: $multiplex_min_streams
+EOF
+      fi
+      if [ -n "$multiplex_max_streams" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    max-streams: $multiplex_max_streams
+EOF
+      fi
+      if [ -n "$multiplex_padding" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    padding: $multiplex_padding
+EOF
+      fi
+      if [ -n "$multiplex_statistic" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    statistic: $multiplex_statistic
+EOF
+      fi
+      if [ -n "$multiplex_only_tcp" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    only-tcp: $multiplex_only_tcp
+EOF
+      fi
+   fi
+
 #interface-name
    if [ -n "$interface_name" ]; then
 cat >> "$SERVER_FILE" <<-EOF
@@ -1196,6 +1341,11 @@ EOF
 cat >> "$SERVER_FILE" <<-EOF
     routing-mark: "$routing_mark"
 EOF
+   fi
+
+#other_parameters
+   if [ -n "$other_parameters" ]; then
+      echo -e "$other_parameters" >> "$SERVER_FILE"
    fi
 }
 
@@ -1257,8 +1407,8 @@ fi
 rm -rf $proxy_provider_name
 
 #proxy
-rule_sources=$(uci get openclash.config.rule_sources 2>/dev/null)
-create_config=$(uci get openclash.config.create_config 2>/dev/null)
+rule_sources=$(uci -q get openclash.config.rule_sources)
+create_config=$(uci -q get openclash.config.create_config)
 LOG_OUT "Start Writing【$CONFIG_NAME】Proxies Setting..."
 echo "proxies:" >$SERVER_FILE
 config_foreach yml_servers_set "servers"
@@ -1349,7 +1499,7 @@ fi
 cat /tmp/Proxy_Provider >> $SERVER_FILE 2>/dev/null
 config_load "openclash"
 config_foreach yml_other_rules_del "other_rules" "$CONFIG_NAME" "ConnersHua"
-uci_name_tmp=$(uci add openclash other_rules)
+uci_name_tmp=$(uci -q add openclash other_rules)
 uci_set="uci -q set openclash.$uci_name_tmp."
 ${UCI_SET}rule_source="1"
 ${uci_set}enable="1"
@@ -1425,7 +1575,7 @@ cat >> "$SERVER_FILE" <<-EOF
       - Proxy
 EOF
 cat >> "$SERVER_FILE" <<-EOF
-  - name: ChatGPT
+  - name: OpenAI
     type: select
     proxies:
       - Proxy
@@ -1664,12 +1814,40 @@ EOF
 fi
 cat /tmp/Proxy_Provider >> $SERVER_FILE 2>/dev/null
 cat >> "$SERVER_FILE" <<-EOF
+  - name: miHoYo
+    type: select
+    proxies:
+      - DIRECT
+      - Proxy
+EOF
+cat /tmp/Proxy_Server >> $SERVER_FILE 2>/dev/null
+if [ -f "/tmp/Proxy_Provider" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    use:
+EOF
+fi
+cat /tmp/Proxy_Provider >> $SERVER_FILE 2>/dev/null
+cat >> "$SERVER_FILE" <<-EOF
   - name: AdBlock
     type: select
     proxies:
       - REJECT
       - DIRECT
       - Proxy
+  - name: Anti IP
+    type: select
+    proxies:
+      - DIRECT
+      - Proxy
+EOF
+cat /tmp/Proxy_Server >> $SERVER_FILE 2>/dev/null
+if [ -f "/tmp/Proxy_Provider" ]; then
+cat >> "$SERVER_FILE" <<-EOF
+    use:
+EOF
+fi
+cat /tmp/Proxy_Provider >> $SERVER_FILE 2>/dev/null
+cat >> "$SERVER_FILE" <<-EOF
   - name: Asian TV
     type: select
     proxies:
@@ -1769,7 +1947,7 @@ fi
 cat /tmp/Proxy_Provider >> $SERVER_FILE 2>/dev/null
 config_load "openclash"
 config_foreach yml_other_rules_del "other_rules" "$CONFIG_NAME" "lhie1"
-uci_name_tmp=$(uci add openclash other_rules)
+uci_name_tmp=$(uci -q add openclash other_rules)
 uci_set="uci -q set openclash.$uci_name_tmp."
 ${UCI_SET}rule_source="1"
 ${uci_set}enable="1"
@@ -1789,14 +1967,16 @@ ${uci_set}AppleTV="Apple TV"
 ${uci_set}GoogleFCM="Google FCM"
 ${uci_set}Scholar="Scholar"
 ${uci_set}Microsoft="Microsoft"
-${uci_set}ChatGPT="ChatGPT"
+${uci_set}OpenAI="OpenAI"
 ${uci_set}Netflix="Netflix"
 ${uci_set}Discovery="Discovery Plus"
 ${uci_set}DAZN="DAZN"
 ${uci_set}Disney="Disney"
 ${uci_set}Spotify="Spotify"
 ${uci_set}Steam="Steam"
+${uci_set}miHoYo="miHoYo"
 ${uci_set}AdBlock="AdBlock"
+${uci_set}AntiIP="Anti IP"
 ${uci_set}Speedtest="Speedtest"
 ${uci_set}Telegram="Telegram"
 ${uci_set}Crypto="Crypto"
@@ -1821,18 +2001,20 @@ ${uci_set}Others="Others"
 	${UCI_DEL_LIST}="Netflix" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Netflix" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Discovery Plus" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Discovery Plus" >/dev/null 2>&1
 	${UCI_DEL_LIST}="DAZN" >/dev/null 2>&1 && ${UCI_ADD_LIST}="DAZN" >/dev/null 2>&1
-  ${UCI_DEL_LIST}="ChatGPT" >/dev/null 2>&1 && ${UCI_ADD_LIST}="ChatGPT" >/dev/null 2>&1
+  ${UCI_DEL_LIST}="OpenAI" >/dev/null 2>&1 && ${UCI_ADD_LIST}="OpenAI" >/dev/null 2>&1
   ${UCI_DEL_LIST}="Apple TV" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Apple TV" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Google FCM" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Google FCM" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Scholar" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Scholar" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Disney" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Disney" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Spotify" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Spotify" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Steam" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Steam" >/dev/null 2>&1
+  ${UCI_DEL_LIST}="miHoYo" >/dev/null 2>&1 && ${UCI_ADD_LIST}="miHoYo" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Telegram" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Telegram" >/dev/null 2>&1
   ${UCI_DEL_LIST}="Crypto" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Crypto" >/dev/null 2>&1
   ${UCI_DEL_LIST}="Discord" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Discord" >/dev/null 2>&1
 	${UCI_DEL_LIST}="PayPal" >/dev/null 2>&1 && ${UCI_ADD_LIST}="PayPal" >/dev/null 2>&1
 	${UCI_DEL_LIST}="Speedtest" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Speedtest" >/dev/null 2>&1
+  ${UCI_DEL_LIST}="Anti IP" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Anti IP" >/dev/null 2>&1
   ${UCI_DEL_LIST}="Others" >/dev/null 2>&1 && ${UCI_ADD_LIST}="Others" >/dev/null 2>&1
 }
 elif [ "$rule_sources" = "ConnersHua_return" ] && [ "$servers_if_update" != "1" ] && [ -z "$if_game_proxy" ]; then
@@ -1880,7 +2062,7 @@ cat >> "$SERVER_FILE" <<-EOF
 EOF
 config_load "openclash"
 config_foreach yml_other_rules_del "other_rules" "$CONFIG_NAME" "ConnersHua_return"
-uci_name_tmp=$(uci add openclash other_rules)
+uci_name_tmp=$(uci -q add openclash other_rules)
 uci_set="uci -q set openclash.$uci_name_tmp."
 ${UCI_SET}rule_source="1"
 ${uci_set}enable="1"
@@ -1925,6 +2107,6 @@ rm -rf /tmp/Proxy_Server 2>/dev/null
 rm -rf /tmp/Proxy_Provider 2>/dev/null
 del_lock
 ${UCI_SET}enable=1 2>/dev/null
-[ "$(uci get openclash.config.servers_if_update)" == "0" ] && [ -z "$if_game_proxy" ] && /etc/init.d/openclash restart >/dev/null 2>&1
+[ "$(uci -q get openclash.config.servers_if_update)" == "0" ] && [ -z "$if_game_proxy" ] && /etc/init.d/openclash restart >/dev/null 2>&1
 ${UCI_SET}servers_if_update=0
-uci commit openclash
+uci -q commit openclash

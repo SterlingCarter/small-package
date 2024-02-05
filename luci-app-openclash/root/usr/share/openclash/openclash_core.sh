@@ -3,13 +3,16 @@
 . /usr/share/openclash/openclash_ps.sh
 . /usr/share/openclash/log.sh
 
+github_address_mod=$(uci -q get openclash.config.github_address_mod || echo 0)
+if [ "$github_address_mod" = "0" ] && [ "$1" != "one_key_update" ] && [ "$2" != "one_key_update" ]; then
+   LOG_OUT "Tip: If the download fails, try setting the CDN in Overwrite Settings - General Settings - Github Address Modify Options"
+fi
 CORE_TYPE="$1"
 C_CORE_TYPE=$(uci -q get openclash.config.core_type)
 [ -z "$CORE_TYPE" ] || [ "$1" = "one_key_update" ] && CORE_TYPE="Dev"
 small_flash_memory=$(uci -q get openclash.config.small_flash_memory)
 CPU_MODEL=$(uci -q get openclash.config.core_version)
 RELEASE_BRANCH=$(uci -q get openclash.config.release_branch || echo "master")
-github_address_mod=$(uci -q get openclash.config.github_address_mod || echo 0)
 LOG_FILE="/tmp/openclash.log"
 
 [ ! -f "/tmp/clash_last_version" ] && /usr/share/openclash/clash_version.sh 2>/dev/null
@@ -42,7 +45,7 @@ case $CORE_TYPE in
    fi
    ;;
    "Meta")
-   CORE_CV=$($meta_core_path -v 2>/dev/null |awk -F ' ' '{print $3}')
+   CORE_CV=$($meta_core_path -v 2>/dev/null |awk -F ' ' '{print $3}' |head -1)
    CORE_LV=$(sed -n 3p /tmp/clash_last_version 2>/dev/null)
    ;;
    *)
@@ -68,13 +71,8 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
             else
 			      curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://raw.githubusercontent.com/vernesong/OpenClash/core/"$RELEASE_BRANCH"/premium/clash-"$CPU_MODEL"-"$CORE_LV".gz -o /tmp/clash_tun.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash_tun.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
 			   fi
-            if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-               curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://ftp.jaist.ac.jp/pub/sourceforge.jp/storage/g/o/op/openclash/"$RELEASE_BRANCH"/core-lateset/premium/clash-"$CPU_MODEL"-"$CORE_LV".gz -o /tmp/clash_tun.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash_tun.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
-               curl_status=${PIPESTATUS[0]}
-            else
-               curl_status=0
-            fi
-            if [ "$curl_status" -eq 0 ]; then
+
+            if [ "${PIPESTATUS[0]}" -eq 0 ]; then
                gzip -t /tmp/clash_tun.gz >/dev/null 2>&1
             fi
 			   ;;
@@ -91,13 +89,8 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
             else
                curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://raw.githubusercontent.com/vernesong/OpenClash/core/"$RELEASE_BRANCH"/meta/clash-"$CPU_MODEL".tar.gz -o /tmp/clash_meta.tar.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash_meta.tar.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
             fi
-            if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-               curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://ftp.jaist.ac.jp/pub/sourceforge.jp/storage/g/o/op/openclash/"$RELEASE_BRANCH"/core-lateset/meta/clash-"$CPU_MODEL".tar.gz -o /tmp/clash_meta.tar.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash_meta.tar.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
-               curl_status=${PIPESTATUS[0]}
-            else
-               curl_status=0
-            fi
-            if [ "$curl_status" -eq 0 ]; then
+
+            if [ "${PIPESTATUS[0]}" -eq 0 ]; then
 			      gzip -t /tmp/clash_meta.tar.gz >/dev/null 2>&1
 			   fi
 			   ;;
@@ -114,13 +107,8 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
                else
 			         curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://raw.githubusercontent.com/vernesong/OpenClash/core/"$RELEASE_BRANCH"/dev/clash-"$CPU_MODEL".tar.gz -o /tmp/clash.tar.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash.tar.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
 			      fi
-			      if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-			         curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 https://ftp.jaist.ac.jp/pub/sourceforge.jp/storage/g/o/op/openclash/"$RELEASE_BRANCH"/core-lateset/dev/clash-"$CPU_MODEL".tar.gz -o /tmp/clash.tar.gz 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="/tmp/clash.tar.gz" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
-                  curl_status=${PIPESTATUS[0]}
-               else
-                  curl_status=0
-               fi
-               if [ "$curl_status" -eq 0 ]; then
+
+               if [ "${PIPESTATUS[0]}" -eq 0 ]; then
 			         gzip -t /tmp/clash.tar.gz >/dev/null 2>&1
 			      fi
 			esac

@@ -115,6 +115,8 @@ function unlock_auto_select()
 			key_group = UCI:get("openclash", "config", "stream_auto_select_group_key_bilibili") or "bilibili"
 		elseif type == "Google" then
 			key_group = UCI:get("openclash", "config", "stream_auto_select_group_key_google_not_cn") or "google|谷歌"
+		elseif type == "OpenAI" then
+			key_group = UCI:get("openclash", "config", "stream_auto_select_group_key_openai") or "OpenAI|ChatGPT"
 		end
 		if not key_group then key_group = type end
 	else
@@ -713,6 +715,8 @@ function nodes_filter(t, info)
 		regex = UCI:get("openclash", "config", "stream_auto_select_node_key_bilibili") or ""
 	elseif type == "Google" then
 		regex = UCI:get("openclash", "config", "stream_auto_select_node_key_google_not_cn") or ""
+	elseif type == "OpenAI" then
+		regex = UCI:get("openclash", "config", "stream_auto_select_node_key_openai") or ""
 	end
 
 	if class_type(t) == "table" then
@@ -775,6 +779,8 @@ function proxy_unlock_test()
 		region, old_region = bilibili_unlock_test()
 	elseif type == "Google" then
 		region, old_region = google_not_cn_test()
+	elseif type == "OpenAI" then
+		region, old_region = openai_unlock_test()
 	end
 	return region, old_region
 end
@@ -808,13 +814,15 @@ function auto_get_policy_group(passwd, ip, port)
 		SYS.call('curl -sL -m 5 --limit-rate 1k -o /dev/null https://www.bilibili.com/ &')
 	elseif type == "Google" then
 		SYS.call('curl -sL -m 5 --limit-rate 1k -o /dev/null https://timeline.google.com &')
+	elseif type == "OpenAI" then
+		SYS.call('curl -sL -m 5 --limit-rate 1k -o /dev/null https://chat.openai.com/ &')
 	end
 	os.execute("sleep 1")
 	con = SYS.exec(string.format('curl -sL -m 5 --retry 2 -H "Content-Type: application/json" -H "Authorization: Bearer %s" -XGET http://%s:%s/connections', passwd, ip, port))
 	if con then
 		con = JSON.parse(con)
 	end
-	if con then
+	if con and con.connections then
 		for i = 1, #(con.connections) do
 			if type == "Netflix" then
 				if string.match(con.connections[i].metadata.host, "www%.netflix%.com") then
@@ -878,6 +886,11 @@ function auto_get_policy_group(passwd, ip, port)
 				end
 			elseif type == "Google" then
 				if string.match(con.connections[i].metadata.host, "timeline%.google%.com") then
+					auto_get_group = con.connections[i].chains[#(con.connections[i].chains)]
+					break
+				end
+			elseif type == "OpenAI" then
+				if string.match(con.connections[i].metadata.host, "chat%.openai%.com") then
 					auto_get_group = con.connections[i].chains[#(con.connections[i].chains)]
 					break
 				end
@@ -1369,7 +1382,7 @@ function paramount_plus_unlock_test()
 		if not string.find(data.url_effective, "intl") then
 			status = 2
 			data = SYS.exec(string.format("curl -sL --connect-timeout 5 -m 5 --speed-time 5 --speed-limit 1 --retry 2 -H 'Accept-Language: en' -H 'Content-Type: application/json' -H 'User-Agent: %s' %s", UA, url))
-			region = string.upper(string.sub(string.match(data, "\"siteEdition\":\"%a+|%a+\""), 19, -1)) or string.upper(string.sub(string.match(data, "property: '%a+'"), 12, -2))
+			region = string.upper(string.sub(string.match(data, "\"siteEdition\":\"%a+|%a+\""), 19, -2)) or string.upper(string.sub(string.match(data, "property: '%a+'"), 12, -2))
 			if region then
 				if FS.isfile(string.format("/tmp/openclash_%s_region", type)) then
 					old_region = FS.readfile(string.format("/tmp/openclash_%s_region", type))
@@ -1480,6 +1493,41 @@ function google_not_cn_test()
 			status = 1
 		end
 		return region
+	end
+end
+
+function openai_unlock_test()
+	status = 0
+	local url = "https://chat.openai.com/"
+	local region_url = "https://chat.openai.com/cdn-cgi/trace"
+	local regex = UCI:get("openclash", "config", "stream_auto_select_region_key_openai") or ""
+	local region = ""
+	local old_region = ""
+	local data = SYS.exec(string.format("curl -sIL --connect-timeout 5 -m 5 --speed-time 5 --speed-limit 1 --retry 2 -H 'Accept-Language: en' -H 'Content-Type: application/json' -H 'User-Agent: %s' '%s'", UA, url))
+	if data then
+		if string.find(data, "text/html") then
+			status = 2
+			local region_data = SYS.exec(string.format("curl -sL --connect-timeout 5 -m 5 --speed-time 5 --speed-limit 1 --retry 2 -H 'Accept-Language: en' -H 'Content-Type: application/json' -H 'User-Agent: %s' '%s'", UA, region_url))
+			if region_data and string.match(region_data, "loc=%a+") then
+				region = string.upper(string.sub(string.match(region_data, "loc=%a+"), 5, -1))
+			end
+			if region then
+				if FS.isfile(string.format("/tmp/openclash_%s_region", type)) then
+					old_region = FS.readfile(string.format("/tmp/openclash_%s_region", type))
+				end
+				if not datamatch(region, regex) then
+					status = 3
+				elseif old_region ~= "" and region ~= old_region and not all_test then
+					status = 4
+				end
+				if status == 2 and not all_test and ((old_region ~= "" and region ~= old_region) or (old_region == "")) then
+					FS.writefile(string.format("/tmp/openclash_%s_region", type), region)
+				end
+	  		end
+		else
+			status = 1
+		end
+		return region, old_region
 	end
 end
 

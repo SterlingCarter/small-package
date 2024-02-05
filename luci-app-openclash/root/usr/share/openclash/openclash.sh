@@ -34,6 +34,9 @@ DNSMASQ_CONF_DIR=$(uci -q get dhcp.@dnsmasq[0].confdir || echo '/tmp/dnsmasq.d')
 DNSMASQ_CONF_DIR=${DNSMASQ_CONF_DIR%*/}
 custom_china_domain_dns_server=$(uci -q get openclash.config.custom_china_domain_dns_server || echo "114.114.114.114")
 FW4=$(command -v fw4)
+CLASH="/etc/openclash/clash"
+CLASH_CONFIG="/tmp"
+
 
 if [ -z "$DNSPORT" ]; then
    DNSPORT=$(netstat -nlp |grep -E '127.0.0.1:.*dnsmasq' |awk -F '127.0.0.1:' '{print $2}' |awk '{print $1}' |head -1 || echo 53)
@@ -60,26 +63,51 @@ kill_watchdog() {
    done >/dev/null 2>&1
 }
 
+config_test()
+{
+   if [ -f "$CLASH" ]; then
+      LOG_OUT "Config File Download Successful, Test If There is Any Errors..."
+      test_info=$(nohup $CLASH -t -d $CLASH_CONFIG -f "$CFG_FILE")
+      local IFS=$'\n'
+      for i in $test_info; do
+         if [ -n "$(echo "$i" |grep "configuration file")" ]; then
+            local info=$(echo "$i" |sed "s# ${CFG_FILE} #【${CONFIG_FILE}】#g")
+            LOG_OUT "$info"
+         else
+            echo "$i" >> "$LOG_FILE"
+         fi
+      done
+      if [ -n "$(echo "$test_info" |grep "test failed")" ]; then
+         return 1
+      fi
+   else
+      return 0
+   fi
+}
+
 config_download()
 {
 if [ -n "$subscribe_url_param" ]; then
    if [ -n "$c_address" ]; then
-      curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H 'User-Agent: Clash' "$c_address""$subscribe_url_param" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
+      curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H "$sub_ua" "$c_address""$subscribe_url_param" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
    else
-      curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H 'User-Agent: Clash' https://api.dler.io/sub"$subscribe_url_param" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
-      if [ "$?" -ne 0 ]; then
-         curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H 'User-Agent: Clash' https://subconverter.herokuapp.com/sub"$subscribe_url_param" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
-      fi
+      curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H "$sub_ua" https://api.dler.io/sub"$subscribe_url_param" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
    fi
 else
-   curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H 'User-Agent: Clash' "$subscribe_url" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
+   curl -SsL --connect-timeout 30 -m 60 --speed-time 30 --speed-limit 1 --retry 2 -H "$sub_ua" "$subscribe_url" -o "$CFG_FILE" 2>&1 | awk -v time="$(date "+%Y-%m-%d %H:%M:%S")" -v file="$CFG_FILE" '{print time "【" file "】Download Failed:【"$0"】"}' >> "$LOG_FILE"
 fi
 }
 
 config_cus_up()
 {
 	if [ -z "$CONFIG_PATH" ]; then
-      CONFIG_PATH="/etc/openclash/config/$(ls -lt /etc/openclash/config/ | grep -E '.yaml|.yml' | head -n 1 |awk '{print $9}')"
+      for file_name in /etc/openclash/config/*
+      do
+         if [ -f "$file_name" ]; then
+            CONFIG_PATH=$file_name
+            break
+         fi
+      done
       uci -q set openclash.config.config_path="$CONFIG_PATH"
       uci commit openclash
 	fi
@@ -158,7 +186,7 @@ config_cus_up()
 
 config_su_check()
 {
-   LOG_OUT "Config File Download Successful, Check If There is Any Update..."
+   LOG_OUT "Config File Test Successful, Check If There is Any Update..."
    sed -i 's/!<str> /!!str /g' "$CFG_FILE" >/dev/null 2>&1
    if [ -f "$CONFIG_FILE" ]; then
       cmp -s "$BACKPACK_FILE" "$CFG_FILE"
@@ -425,6 +453,14 @@ EOF
       if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$CFG_FILE" ]; then
          #prevent ruby unexpected error
          sed -i -E 's/protocol-param: ([^,'"'"'"''}( *#)\n\r]+)/protocol-param: "\1"/g' "$CFG_FILE" 2>/dev/null
+         sed -i '/^ \{0,\}enhanced-mode:/d' "$CFG_FILE" >/dev/null 2>&1
+         config_test
+         if [ $? -ne 0 ]; then
+            LOG_OUT "Error: Config File Tested Faild, Please Check The Log Infos!"
+            change_dns
+            config_error
+            return
+         fi
          ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
          begin
          YAML.load_file('$CFG_FILE');
@@ -467,7 +503,7 @@ EOF
 
 server_key_match()
 {
-	 local key_match key_word
+	local key_match key_word
 	 
    if [ -n "$(echo "$1" |grep "^ \{0,\}$")" ] || [ -n "$(echo "$1" |grep "^\t\{0,\}$")" ]; then
 	    return
@@ -507,7 +543,7 @@ server_key_match()
 
 sub_info_get()
 {
-   local section="$1" subscribe_url template_path subscribe_url_param template_path_encode key_match_param key_ex_match_param c_address de_ex_keyword
+   local section="$1" subscribe_url template_path subscribe_url_param template_path_encode key_match_param key_ex_match_param c_address de_ex_keyword sub_ua
    config_get_bool "enabled" "$section" "enabled" "1"
    config_get "name" "$section" "name" ""
    config_get "sub_convert" "$section" "sub_convert" ""
@@ -524,6 +560,7 @@ sub_info_get()
    config_get "rule_provider" "$section" "rule_provider" ""
    config_get "custom_template_url" "$section" "custom_template_url" ""
    config_get "de_ex_keyword" "$section" "de_ex_keyword" ""
+   config_get "sub_ua" "$section" "sub_ua" "Clash"
    
    if [ "$enabled" -eq 0 ]; then
       return
@@ -537,6 +574,10 @@ sub_info_get()
       udp="&udp=true"
    else
       udp=""
+   fi
+
+   if [ -n "$sub_ua" ]; then
+      sub_ua="User-Agent: $sub_ua"
    fi
    
    if [ "$rule_provider" == "true" ]; then
@@ -552,6 +593,10 @@ sub_info_get()
    else
       CONFIG_FILE="/etc/openclash/config/$name.yaml"
       BACKPACK_FILE="/etc/openclash/backup/$name.yaml"
+   fi
+
+   if [ -n "$2" ] && [ "$2" != "$CONFIG_FILE" ]; then
+      return
    fi
    
    if [ ! -z "$keyword" ] || [ ! -z "$ex_keyword" ]; then
@@ -584,8 +629,8 @@ sub_info_get()
       fi
       if [ -n "$template_path" ]; then
          template_path_encode=$(urlencode "$template_path")
-         [ -n "$key_match_param" ] && key_match_param="(?i)$(urlencode "$key_match_param")"
-         [ -n "$key_ex_match_param" ] && key_ex_match_param="(?i)$(urlencode "$key_ex_match_param")"
+         [ -n "$key_match_param" ] && key_match_param="$(urlencode "$key_match_param")"
+         [ -n "$key_ex_match_param" ] && key_ex_match_param="$(urlencode "$key_ex_match_param")"
          subscribe_url_param="?target=clash&new_name=true&url=$subscribe_url&config=$template_path_encode&include=$key_match_param&exclude=$key_ex_match_param&emoji=$emoji&list=false&sort=$sort$udp&scv=$skip_cert_verify&append_type=$node_type&fdn=true$rule_provider"
          c_address="$convert_address"
       else
@@ -598,11 +643,17 @@ sub_info_get()
    LOG_OUT "Start Updating Config File【$name】..."
 
    config_download
-
    if [ "${PIPESTATUS[0]}" -eq 0 ] && [ -s "$CFG_FILE" ]; then
       #prevent ruby unexpected error
       sed -i -E 's/protocol-param: ([^,'"'"'"''}( *#)\n\r]+)/protocol-param: "\1"/g' "$CFG_FILE" 2>/dev/null
-   	ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
+      sed -i '/^ \{0,\}enhanced-mode:/d' "$CFG_FILE" >/dev/null 2>&1
+      config_test
+      if [ $? -ne 0 ]; then
+         LOG_OUT "Error: Config File Tested Faild, Please Check The Log Infos!"
+         config_download_direct
+         return
+      fi
+      ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
       begin
       YAML.load_file('$CFG_FILE');
       rescue Exception => e
@@ -636,7 +687,7 @@ sub_info_get()
 
 #分别获取订阅信息进行处理
 config_load "openclash"
-config_foreach sub_info_get "config_subscribe"
+config_foreach sub_info_get "config_subscribe" "$1"
 uci -q delete openclash.config.config_update_path
 uci commit openclash
 

@@ -23,11 +23,11 @@ do_install() {
   [ -z "$http_port" ] && http_port=5230
 
   local cmd="docker run --restart=unless-stopped -d \
-    -v \"$config:/config\" \
+    -v \"$config:/var/opt/memos\" \
     --dns=172.17.0.1 \
     -p $http_port:5230 "
 
-  local tz="`uci get system.@system[0].zonename`"
+  local tz="`uci get system.@system[0].zonename | sed 's/ /_/g'`"
   [ -z "$tz" ] || cmd="$cmd -e TZ=$tz"
 
   cmd="$cmd -v /mnt:/mnt"

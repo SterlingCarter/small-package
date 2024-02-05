@@ -32,7 +32,11 @@ else
 fi
 
 if [ -z "${12}" ]; then
-   stack_type=system
+   if [ -n "${33}" ]; then
+      stack_type=${33}
+   else
+      stack_type=system
+   fi
 else
    stack_type=${12}
 fi
@@ -223,21 +227,22 @@ yml_dns_get()
             Value = YAML.load_file('$2');
             Value['proxy-groups'].each{
                |x|
-               if x['name'] == '$specific_group' then
-                  if (x.key?('use') and not x['use'].to_a.empty?) or (x.key?('proxies') and not x['proxies'].to_a.empty?) then
-                     puts 'return'
-                  end;
+               if x['name'] =~ /${specific_group}/ then
+                  puts x['name'];
+                  break;
                end;
             };
          }.join;
       rescue Exception => e
-         puts 'return'
+         puts 'return';
       end;" 2>/dev/null)
 
-      if [ "$group_check" != "return" ]; then
-         /usr/share/openclash/yml_groups_set.sh >/dev/null 2>&1 "$specific_group"
+      if [ "$group_check" != "return" ] && [ -n "$group_check" ]; then
+         specific_group="#$group_check"
+      else
+         specific_group=""
       fi
-      specific_group="#$specific_group"
+      
    elif [ "$specific_group" != "Disable" ] && [ -n "$specific_group" ]; then
       LOG_OUT "Warning: Only Meta Core Support Specific Group, Skip Setting【$dns_type$dns_address】"
       specific_group=""
@@ -364,14 +369,20 @@ Thread.new{
       Value['interface-name']='${24}';
    end;
    if ${19} == 1 then
-      if '${21}' != '0' then
+      if '${21}' == '1' then
          Value['geodata-mode']=true;
       end;
       if '${22}' != '0' then
          Value['geodata-loader']='${22}';
       end;
-      if '${25}' != '0' then
+      if '${25}' == '1' then
          Value['tcp-concurrent']=true;
+      end;
+      if '${34}' == '1' then
+         Value['unified-delay']=true;
+      end;
+      if '${35}' != '0' then
+         Value['keep-alive-interval']=${35};
       end;
       if '${29}' != '0' then
          Value['find-process-mode']='${29}';
@@ -380,7 +391,7 @@ Thread.new{
          Value['global-client-fingerprint']='${31}';
       end;
    end;
-   if not Value.key?('dns') then
+   if not Value.key?('dns') or Value['dns'].nil? then
       Value_1={'dns'=>{'enable'=>true}};
       Value['dns']=Value_1['dns'];
    else
@@ -388,10 +399,7 @@ Thread.new{
    end;
    if ${16} == 1 then
       Value['dns']['ipv6']=true;
-      #meta core v6 DNS
-      if ${19} == 1 then
-         Value['ipv6']=true;
-      end;
+      Value['ipv6']=true;
    else
       Value['dns']['ipv6']=false;
    end;
@@ -468,7 +476,7 @@ Thread.new{
       end;
    end;
    Value_2={'tun'=>{'enable'=>true}};
-   if $en_mode_tun != 0 then
+   if $en_mode_tun != 0 or ${32} == 2 then
       Value['tun']=Value_2['tun'];
       Value['tun']['stack']='$stack_type';
       if ${19} == 1 then
@@ -486,7 +494,7 @@ Thread.new{
    if Value.key?('iptables') then
       Value.delete('iptables');
    end;
-   if not Value.key?('profile') then
+   if not Value.key?('profile') or Value['profile'].nil? then
       Value_3={'profile'=>{'store-selected'=>true}};
       Value['profile']=Value_3['profile'];
    else
@@ -625,6 +633,14 @@ Thread.new{
       if File::exist?('/etc/openclash/custom/openclash_custom_domain_dns_policy.list') then
          Value_6 = YAML.load_file('/etc/openclash/custom/openclash_custom_domain_dns_policy.list');
          if Value_6 != false and not Value_6.nil? then
+            if ${19} != 1 then
+               Value_6.each{|k,v|
+                  if v.class == "Array" then
+                     Value_6.delete(k);
+                     puts '${LOGTIME} Warning: Skip the nameserver-policy that Core not Support【' + k + '】'
+                  end;
+               }
+            end;
             if Value['dns'].has_key?('nameserver-policy') and not Value['dns']['nameserver-policy'].to_a.empty? then
                Value['dns']['nameserver-policy'].merge!(Value_6);
             else

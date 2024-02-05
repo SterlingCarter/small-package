@@ -81,7 +81,7 @@ natflow_qos_setup()
 		user=qos_u$idx
 	fi
 
-	if [ "$(echo $user_port | sed 's/,/ /g' | wc -w)" -gt 1 ]; then
+	if [ "$(echo $user_port | sed 's/,/ /g;s/-/ /g' | wc -w)" -gt 1 ]; then
 		ipset create qos_up$idx bitmap:port range 0-65535 2>/dev/null
 		ipset flush qos_up$idx
 		for port in $(echo $user_port | sed 's/,/ /g'); do
@@ -100,7 +100,7 @@ natflow_qos_setup()
 		remote=qos_r$idx
 	fi
 
-	if [ "$(echo $remote_port | sed 's/,/ /g' | wc -w)" -gt 1 ]; then
+	if [ "$(echo $remote_port | sed 's/,/ /g;s/-/ /g' | wc -w)" -gt 1 ]; then
 		ipset create qos_rp$idx bitmap:port range 0-65535 2>/dev/null
 		ipset flush qos_rp$idx
 		for port in $(echo $remote_port | sed 's/,/ /g'); do
@@ -117,12 +117,111 @@ natflow_qos_setup()
 	echo "$cmd" >$DEVCTL
 }
 
+natflow_qos_zone_setup_tc()
+{
+	local idx=$zone_idx
+	zone_idx=$((zone_idx+1))
+	local cfg="$1"
+	local fw_zone ifname type
+
+	config_get fw_zone "$cfg" fw_zone
+	config_get ifname "$cfg" ifname
+	config_get type "$cfg" type
+
+	(for fwz in $fw_zone; do
+		fw3 -q zone $fwz
+	done; \
+	for ifn in $ifname; do
+		echo $ifn
+	done) | sed 's/+$/\.\*/' | sort | uniq | while read IFN; do
+		#echo $type $idx=$IFN >$DEVCTL
+		case $type in
+		lan_zone)
+			ifconfig -a | grep "^$IFN " | awk '{print $1}' | while read lan; do
+				if [ "${lan}" = "${lan//:}" ]; then
+					qos_id=0
+					cat /dev/qos_ctl | grep "^add user=" | while read line; do
+						line="${line/*rxbytes=}"
+						rxbytes="${line/,*}"
+						quantum=$(($rxbytes/1000))
+						if test $quantum -lt 256; then
+							quantum=256
+						fi
+						qos_id=$((qos_id+1))
+						QOSID=$((qos_id*2-1))
+						lower1=$(for vif in /sys/class/net/$lan/lower_*; do test -e $vif && echo ${vif##/sys/class/net/*/lower_}; done)
+						lower2=$(for dev in $lower1; do for vif in /sys/class/net/$dev/lower_*; do test -e $vif && echo ${vif##/sys/class/net/*/lower_}; done; done)
+						devs=$(for dev in $lan $lower1 $lower2; do echo $dev; done | sort | uniq);
+						echo setup tc for @lan=[`echo $devs`] rxbytes=$rxbytes quantum=$quantum rule_id=${qos_id} QOSID=${QOSID}
+						for DEVICE in $devs; do
+							tc qdisc add dev $DEVICE root handle 1: htb &>/dev/null
+							tc class add dev $DEVICE parent 1: classid 1:${QOSID} htb rate ${rxbytes}Bps quantum $quantum &>/dev/null
+							tc filter add dev $DEVICE parent 1: protocol all prio 1 handle ${QOSID} fw classid 1:${QOSID} &>/dev/null
+						done
+					done
+				fi
+			done
+		;;
+		wan_zone)
+			ifconfig -a | grep "^$IFN " | awk '{print $1}' | while read wan; do
+				if [ "${wan}" = "${wan//:}" ]; then
+					qos_id=0
+					cat /dev/qos_ctl | grep "^add user=" | while read line; do
+						txbytes="${line/*,txbytes=}"
+						quantum=$(($txbytes/1000))
+						if test $quantum -lt 256; then
+							quantum=256
+						fi
+						qos_id=$((qos_id+1))
+						QOSID=$((qos_id*2))
+						lower1=$(for vif in /sys/class/net/$wan/lower_*; do test -e $vif && echo ${vif##/sys/class/net/*/lower_}; done)
+						lower2=$(for dev in $lower1; do for vif in /sys/class/net/$dev/lower_*; do test -e $vif && echo ${vif##/sys/class/net/*/lower_}; done; done)
+						devs=$(for dev in $wan $lower1 $lower2; do echo $dev; done | sort | uniq);
+						echo setup tc for @wan=[`echo $devs`] txbytes=$txbytes quantum=$quantum rule_id=${qos_id} QOSID=${QOSID}
+						for DEVICE in $devs; do
+							tc qdisc add dev $DEVICE root handle 1: htb &>/dev/null
+							tc class add dev $DEVICE parent 1: classid 1:${QOSID} htb rate ${txbytes}Bps quantum $quantum &>/dev/null
+							tc filter add dev $DEVICE parent 1: protocol all prio 1 handle ${QOSID} fw classid 1:${QOSID} &>/dev/null
+						done
+					done
+				fi
+			done
+		;;
+		esac
+	done
+}
+
+natflow_qos_clear_tc()
+{
+	which tc &>/dev/null || return
+	ifconfig | grep "^[^ ]" | awk '{print $1}' | while read ifname; do
+		if [ "${ifname}" = "${ifname//:}" ]; then
+			tc qdisc del dev $ifname root &>/dev/null
+		fi
+	done
+}
+
 start() {
 	test -c $DEVCTL || return 0
 
 	echo clear >$DEVCTL
 
 	config_load natflow
+	config_foreach natflow_qos_setup qos
+
+	natflow_qos_clear_tc
+
+	if [ "$(uci get natflow.main.tc_classid_mode 2>/dev/null || echo 0)" = "1" ] && which tc &>/dev/null; then
+		echo tc_classid_mode=1 >/dev/qos_ctl
+		config_foreach natflow_qos_zone_setup_tc zone
+	else
+		echo tc_classid_mode=0 >/dev/qos_ctl
+	fi
+
+	mkdir -p /tmp/config
+	touch /tmp/config/natflow-qos
+	ln -s /tmp/config/natflow-qos /etc/config/natflow-qos &>/dev/null
+	config_load natflow-qos
 	config_foreach natflow_qos_setup qos
 }
 
@@ -133,6 +232,8 @@ stop() {
 	ipset list -n | grep ^qos_ | while read ipset; do
 		ipset destroy $ipset
 	done
+
+	natflow_qos_clear_tc
 }
 
 restart() {

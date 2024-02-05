@@ -24,6 +24,7 @@ DISNEY_DOMAINS_LIST="/usr/share/openclash/res/Disney_Plus_Domains.list"
 china_ip_route=$(uci -q get openclash.config.china_ip_route)
 en_mode=$(uci -q get openclash.config.en_mode)
 fakeip_range=$(uci -q get openclash.config.fakeip_range || echo "198.18.0.1/16")
+ipv6_mode=$(uci -q get openclash.config.ipv6_mode || echo 0)
 CRASH_NUM=0
 CFG_UPDATE_INT=1
 STREAM_DOMAINS_PREFETCH=1
@@ -46,7 +47,8 @@ check_dnsmasq() {
                      nft delete rule inet fw4 ${nft} handle ${handle}
                   done
                done >/dev/null 2>&1
-               position=$(nft list chain inet fw4 dstnat |grep "OpenClash" |grep "DNS" |awk -F '# handle ' '{print$2}' |sort -rn |head -1 || ehco 0)
+               local position=$(nft -a list chain inet fw4 dstnat |grep "OpenClash" |grep "DNS" |awk -F '# handle ' '{print$2}' |sort -rn |head -1)
+               [ -z "$position" ] && position=0
                nft add rule inet fw4 dstnat position "$position" tcp dport 53 redirect to "$DNSPORT" comment \"OpenClash DNS Hijack\" 2>/dev/null
                nft add rule inet fw4 dstnat position "$position" udp dport 53 redirect to "$DNSPORT" comment \"OpenClash DNS Hijack\" 2>/dev/null
                if [ "$ipv6_enable" -eq 1 ]; then
@@ -65,12 +67,14 @@ check_dnsmasq() {
                      done
                   fi
                done >/dev/null 2>&1
-               position=$(iptables -nvL PREROUTING -t nat |sed 1,2d |grep "OpenClash" |sed -n "/DNS/=" 2>/dev/null |sort -rn |head -1 || ehco 0)
+               local position=$(iptables -nvL PREROUTING -t nat |sed 1,2d |grep "OpenClash" |sed -n "/DNS/=" 2>/dev/null |sort -rn |head -1)
+               [ -z "$position" ] && position=0
                [ "$position" -ne 0 ] && let position++
                iptables -t nat -I PREROUTING "$position" -p udp --dport 53 -j REDIRECT --to-ports "$DNSPORT" -m comment --comment "OpenClash DNS Hijack" 2>/dev/null
                iptables -t nat -I PREROUTING "$position" -p tcp --dport 53 -j REDIRECT --to-ports "$DNSPORT" -m comment --comment "OpenClash DNS Hijack" 2>/dev/null
                if [ "$ipv6_enable" -eq 1 ]; then
-                  position=$(ip6tables -nvL PREROUTING -t nat |sed 1,2d |grep "OpenClash" |sed -n "/DNS/=" 2>/dev/null |sort -rn |head -1 || ehco 0)
+                  position=$(ip6tables -nvL PREROUTING -t nat |sed 1,2d |grep "OpenClash" |sed -n "/DNS/=" 2>/dev/null |sort -rn |head -1)
+                  [ -z "$position" ] && position=0
                   [ "$position" -ne 0 ] && let position++
                   ip6tables -t nat -I PREROUTING "$position" -p udp --dport 53 -j REDIRECT --to-ports "$DNSPORT" -m comment --comment "OpenClash DNS Hijack" 2>/dev/null
                   ip6tables -t nat -I PREROUTING "$position" -p tcp --dport 53 -j REDIRECT --to-ports "$DNSPORT" -m comment --comment "OpenClash DNS Hijack" 2>/dev/null
@@ -106,6 +110,7 @@ do
    stream_auto_select_discovery_plus=$(uci -q get openclash.config.stream_auto_select_discovery_plus || echo 0)
    stream_auto_select_bilibili=$(uci -q get openclash.config.stream_auto_select_bilibili || echo 0)
    stream_auto_select_google_not_cn=$(uci -q get openclash.config.stream_auto_select_google_not_cn || echo 0)
+   stream_auto_select_openai=$(uci -q get openclash.config.stream_auto_select_openai || echo 0)
    upnp_lease_file=$(uci -q get upnpd.config.upnp_lease_file)
    
    enable=$(uci -q get openclash.config.enable)
@@ -137,6 +142,12 @@ if [ "$enable" -eq 1 ]; then
 	      if [ "$core_type" == "TUN" ] || [ "$core_type" == "Meta" ]; then
 	         ip route replace default dev utun table "$PROXY_ROUTE_TABLE" 2>/dev/null
 	         ip rule add fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" 2>/dev/null
+            if [ "$ipv6_mode" -eq 2 ] && [ "$ipv6_enable" -eq 1 ] && [ "$core_type" == "Meta" ]; then
+               ip -6 rule del oif utun table 2022 >/dev/null 2>&1
+               ip -6 route del default dev utun table 2022 >/dev/null 2>&1
+               ip -6 route replace default dev utun table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1
+               ip -6 rule add fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1
+            fi
 	      fi
 	      sleep 60
 	      continue
@@ -176,16 +187,9 @@ fi
    check_dnsmasq
 
 ## Localnetwork 刷新
-   lan_ip_cidrs=$(ip route | grep "/" | awk '{print $1}' | grep -vE "^$(echo "$fakeip_range"|awk -F '.' '{print $1"."$2}')" 2>/dev/null)
-   lan_ip6_cidrs=$(ip -6 route | grep "/" | awk '{print $1}' | grep -vE "^unreachable" 2>/dev/null)
-   wan_ip4s=$(ifconfig | grep 'inet addr' | awk '{print $2}' | cut -d: -f2 | grep -vE "(^$(echo "$fakeip_range"|awk -F '.' '{print $1"."$2}')|^192.168|^127.0)" 2>/dev/null)
+   wan_ip4s=$(/usr/share/openclash/openclash_get_network.lua "wanip" 2>/dev/null)
+   wan_ip6s=$(ifconfig | grep 'inet6 addr' | awk '{print $3}' 2>/dev/null)
    if [ -n "$FW4" ]; then
-      if [ -n "$lan_ip_cidrs" ]; then
-         for lan_ip_cidr in $lan_ip_cidrs; do
-            nft add element inet fw4 localnetwork { "$lan_ip_cidr" } 2>/dev/null
-         done
-      fi
-
       if [ -n "$wan_ip4s" ]; then
          for wan_ip4 in $wan_ip4s; do
             nft add element inet fw4 localnetwork { "$wan_ip4" } 2>/dev/null
@@ -193,12 +197,6 @@ fi
       fi
 
       if [ "$ipv6_enable" -eq 1 ]; then
-         if [ -n "$lan_ip6_cidrs" ]; then
-            for lan_ip6_cidr in $lan_ip6_cidrs; do
-               nft add element inet fw4 localnetwork6 { "$lan_ip6_cidr" } 2>/dev/null
-            done
-         fi
-
          if [ -n "$wan_ip6s" ]; then
             for wan_ip6 in $wan_ip6s; do
                nft add element inet fw4 localnetwork6 { "$wan_ip6" } 2>/dev/null
@@ -206,24 +204,12 @@ fi
          fi
       fi
    else
-      if [ -n "$lan_ip_cidrs" ]; then
-         for lan_ip_cidr in $lan_ip_cidrs; do
-            ipset add localnetwork "$lan_ip_cidr" 2>/dev/null
-         done
-      fi
-
       if [ -n "$wan_ip4s" ]; then
          for wan_ip4 in $wan_ip4s; do
             ipset add localnetwork "$wan_ip4" 2>/dev/null
          done
       fi
       if [ "$ipv6_enable" -eq 1 ]; then
-         if [ -n "$lan_ip6_cidrs" ]; then
-            for lan_ip6_cidr in $lan_ip6_cidrs; do
-               ipset add localnetwork6 "$lan_ip6_cidr" 2>/dev/null
-            done
-         fi
-
          if [ -n "$wan_ip6s" ]; then
             for wan_ip6 in $wan_ip6s; do
                ipset add localnetwork6 "$wan_ip6" 2>/dev/null
@@ -238,14 +224,13 @@ fi
       if [ -n "$FW4" ]; then
          for i in `$(nft list chain inet fw4 openclash_upnp |grep "return")`
          do
-            upnp_ip=$(echo "$i" |awk -F 'ip saddr \\{ ' '{print $2}' |awk  '{print $1}')
-            upnp_dp=$(echo "$i" |awk -F 'udp sport ' '{print $2}' |awk  '{print $1}')
-            if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ]; then
-               if [ -z "$(cat "$upnp_lease_file" |grep "$upnp_ip" |grep "$upnp_dp")" ]; then
-                  handles=$(nft list chain inet fw4 openclash_upnp |grep "$i" |awk -F '# handle ' '{print$2}')
-                  for handle in $handles; do
-                     nft delete rule inet fw4 openclash_upnp handle ${handle}
-                  done
+            upnp_ip=$(echo "$i" |awk -F 'ip saddr ' '{print $2}' |awk  '{print $1}')
+            upnp_dp=$(echo "$i" |awk -F 'sport ' '{print $2}' |awk  '{print $1}')
+            upnp_type=$(echo "$i" |awk -F 'sport ' '{print $1}' |awk  '{print $4}' |tr '[a-z]' '[A-Z]')
+            if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ] && [ -n "$upnp_type" ]; then
+               if [ -z "$(cat "$upnp_lease_file" |grep "$upnp_ip" |grep "$upnp_dp" |grep "$upnp_type")" ]; then
+                  handle=$(nft -a list chain inet fw4 openclash_upnp |grep "$i" |awk -F '# handle ' '{print$2}')
+                  nft delete rule inet fw4 openclash_upnp handle ${handle}
                fi
             fi
          done >/dev/null 2>&1
@@ -253,10 +238,11 @@ fi
          for i in `$(iptables -t mangle -nL openclash_upnp |grep "RETURN")`
          do
             upnp_ip=$(echo "$i" |awk '{print $4}')
-            upnp_dp=$(echo "$i" |awk -F 'udp spt:' '{print $2}')
-            if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ]; then
-               if [ -z "$(cat "$upnp_lease_file" |grep "$upnp_ip" |grep "$upnp_dp")" ]; then
-                  iptables -t mangle -D openclash_upnp -p udp -s "$upnp_ip" --sport "$upnp_dp" -j RETURN 2>/dev/null
+            upnp_dp=$(echo "$i" |awk -F 'spt:' '{print $2}')
+            upnp_type=$(echo "$i" |awk '{print $2}' |tr '[a-z]' '[A-Z]')
+            if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ] && [ -n "$upnp_type" ]; then
+               if [ -z "$(cat "$upnp_lease_file" |grep "$upnp_ip" |grep "$upnp_dp" |grep "$upnp_type")" ]; then
+                  iptables -t mangle -D openclash_upnp -p "$upnp_type" -s "$upnp_ip" --sport "$upnp_dp" -j RETURN 2>/dev/null
                fi
             fi
          done >/dev/null 2>&1
@@ -268,14 +254,15 @@ fi
             if [ -n "$line" ]; then
                upnp_ip=$(echo "$line" |awk -F ':' '{print $3}')
                upnp_dp=$(echo "$line" |awk -F ':' '{print $4}')
-               if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ]; then
+               upnp_type=$(echo "$line" |awk -F ':' '{print $1}' |tr '[A-Z]' '[a-z]')
+               if [ -n "$upnp_ip" ] && [ -n "$upnp_dp" ] && [ -n "$upnp_type" ]; then
                   if [ -n "$FW4" ]; then
-                     if [ -z "$(nft list chain inet fw4 openclash_upnp |grep "$upnp_ip" |grep "$upnp_dp")" ]; then
-                        nft add rule inet fw4 openclash_upnp ip saddr { "$upnp_ip" } udp sport "$upnp_dp" counter return 2>/dev/null
+                     if [ -z "$(nft list chain inet fw4 openclash_upnp |grep "$upnp_ip" |grep "$upnp_dp" |grep "$upnp_type")" ]; then
+                        nft add rule inet fw4 openclash_upnp ip saddr { "$upnp_ip" } "$upnp_type" sport "$upnp_dp" counter return 2>/dev/null
                      fi
                   else
-                     if [ -z "$(iptables -t mangle -nL openclash_upnp |grep "$upnp_ip" |grep "$upnp_dp")" ]; then
-                        iptables -t mangle -A openclash_upnp -p udp -s "$upnp_ip" --sport "$upnp_dp" -j RETURN 2>/dev/null
+                     if [ -z "$(iptables -t mangle -nL openclash_upnp |grep "$upnp_ip" |grep "$upnp_dp" |grep "$upnp_type")" ]; then
+                        iptables -t mangle -A openclash_upnp -p "$upnp_type" -s "$upnp_ip" --sport "$upnp_dp" -j RETURN 2>/dev/null
                      fi
                   fi
                fi
@@ -368,6 +355,10 @@ fi
             if [ "$stream_auto_select_bilibili" -eq 1 ]; then
                LOG_OUT "Tip: Start Auto Select Proxy For Bilibili Unlock..."
                /usr/share/openclash/openclash_streaming_unlock.lua "Bilibili" >> $LOG_FILE
+            fi
+            if [ "$stream_auto_select_openai" -eq 1 ]; then
+               LOG_OUT "Tip: Start Auto Select Proxy For OpenAI Unlock..."
+               /usr/share/openclash/openclash_streaming_unlock.lua "OpenAI" >> $LOG_FILE
             fi
          fi
       fi

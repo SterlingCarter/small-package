@@ -100,7 +100,7 @@ do_install_detail() {
     -p $port:8096 "
   fi
 
-  local tz="`uci get system.@system[0].zonename`"
+  local tz="`uci get system.@system[0].zonename | sed 's/ /_/g'`"
   [ -z "$tz" ] || cmd="$cmd -e TZ=$tz"
 
   [ -z "$cache" ] || cmd="$cmd -v \"$cache:/config/transcodes\""
@@ -142,7 +142,7 @@ case ${ACTION} in
     docker ps --all -f 'name=jellyfin' --format '{{.State}}'
   ;;
   "port")
-    docker ps --all -f 'name=jellyfin' --format '{{.Ports}}' | grep -om1 '0.0.0.0:[0-9]*' | sed 's/0.0.0.0://'
+    docker ps --all -f 'name=jellyfin' --format '{{.Ports}}' | grep -om1 '0.0.0.0:[0-9]*->8096/tcp' | sed 's/0.0.0.0:\([0-9]*\)->.*/\1/'
   ;;
   *)
     usage

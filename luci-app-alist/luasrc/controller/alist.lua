@@ -5,17 +5,17 @@ function index()
 		return
 	end
 
-	local page = entry({"admin", "services", "alist"}, alias("admin", "services", "alist", "basic"), _("Alist"), 20)
+	local page = entry({"admin", "nas", "alist"}, alias("admin", "nas", "alist", "basic"), _("Alist"), 20)
 	page.dependent = true
 	page.acl_depends = { "luci-app-alist" }
 
-	entry({"admin", "services"}, firstchild(), "Services", 44).dependent = false
-	entry({"admin", "services", "alist", "basic"}, cbi("alist/basic"), _("Basic Setting"), 1).leaf = true
-	entry({"admin", "services", "alist", "log"}, cbi("alist/log"), _("Logs"), 2).leaf = true
-	entry({"admin", "services", "alist", "alist_status"}, call("alist_status")).leaf = true
-	entry({"admin", "services", "alist", "get_log"}, call("get_log")).leaf = true
-	entry({"admin", "services", "alist", "clear_log"}, call("clear_log")).leaf = true
-	entry({"admin", "services", "alist", "admin_info"}, call("admin_info")).leaf = true
+	entry({"admin", "nas"}, firstchild(), "NAS", 44).dependent = false
+	entry({"admin", "nas", "alist", "basic"}, cbi("alist/basic"), _("Basic Setting"), 1).leaf = true
+	entry({"admin", "nas", "alist", "log"}, cbi("alist/log"), _("Logs"), 2).leaf = true
+	entry({"admin", "nas", "alist", "alist_status"}, call("alist_status")).leaf = true
+	entry({"admin", "nas", "alist", "get_log"}, call("get_log")).leaf = true
+	entry({"admin", "nas", "alist", "clear_log"}, call("clear_log")).leaf = true
+	entry({"admin", "nas", "alist", "admin_info"}, call("admin_info")).leaf = true
 end
 
 function alist_status()
@@ -41,8 +41,9 @@ function clear_log()
 end
 
 function admin_info()
-	local username = luci.sys.exec("/usr/bin/alist --data /etc/alist password 2>&1 | tail -2 | awk 'NR==1 {print $2}'")
-	local password = luci.sys.exec("/usr/bin/alist --data /etc/alist password 2>&1 | tail -2 | awk 'NR==2 {print $2}'")
+	local random = luci.sys.exec("/usr/bin/alist --data $(uci -q get alist.@alist[0].data_dir) admin random 2>&1")
+	local username = string.match(random, "username: (%S+)")
+	local password = string.match(random, "password: (%S+)")
 
 	luci.http.prepare_content("application/json")
 	luci.http.write_json({username = username, password = password})

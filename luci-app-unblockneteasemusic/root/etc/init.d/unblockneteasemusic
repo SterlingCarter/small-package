@@ -76,12 +76,13 @@ start_service() {
 	local update_time
 	config_get update_time "config" "update_time" "3"
 	sed -i "/$NAME/d" /etc/crontabs/root
-	is_enabled "config" "auto_update" && echo "0 ${update_time} * * * $UNM_DIR/update.sh update_core" >> "/etc/crontabs/root"
+	echo -e "30 2 * * * /etc/init.d/unblockneteasemusic" >> "/etc/crontabs/root"
+	! is_enabled "config" "auto_update" || echo -e "0 ${update_time} * * * $UNM_DIR/update.sh update_core" >> "/etc/crontabs/root"
 	/etc/init.d/cron restart
 
 	mkdir -p "$RUN_DIR"
-	[ ! -s "$UNM_DIR/core/app.js" ] && { rm -f "$UNM_DIR/local_ver"; sh "$UNM_DIR/update.sh" "update_core_non_restart"; }
-	[ ! -s "$UNM_DIR/core/app.js" ] && { echo "Core Not Found, please download it before starting." >> "$RUN_DIR/run.log"; return 1; }
+	[ -s "$UNM_DIR/core/app.js" ] || { rm -f "$UNM_DIR/local_ver"; sh "$UNM_DIR/update.sh" "update_core_non_restart"; }
+	[ -s "$UNM_DIR/core/app.js" ] || { echo "Core Not Found, please download it before starting." >> "$RUN_DIR/run.log"; return 1; }
 
 	procd_open_instance "$NAME"
 	procd_set_param command node "$UNM_DIR/core/app.js"
@@ -105,7 +106,8 @@ start_service() {
 
 	local music_source
 	config_get music_source "config" "music_source" "default"
-	[ "${music_source}" != "default" ] && append_param -o "${music_source}"
+	[ "$music_source" != "default" ] || music_source="kugou kuwo migu pyncmd"
+	append_param -o "$music_source"
 
 	append_param_arg "config" "cnrelay" "-c"
 	append_param_arg "config" "endpoint_url" "-e" "https://music.163.com"
@@ -119,11 +121,13 @@ start_service() {
 	procd_append_param env LOG_LEVEL="$log_level"
 
 	append_param_env "config" "joox_cookie" "JOOX_COOKIE"
+	append_param_env "config" "kuwo_cookie" "KUWO_COOKIE"
 	append_param_env "config" "migu_cookie" "MIGU_COOKIE"
 	append_param_env "config" "qq_cookie" "QQ_COOKIE"
 	append_param_env "config" "youtube_key" "YOUTUBE_KEY"
 	append_param_env "config" "self_issue_cert_crt" "SIGN_CERT" "$UNM_DIR/core/server.crt"
 	append_param_env "config" "self_issue_cert_key" "SIGN_KEY" "$UNM_DIR/core/server.key"
+	append_param_env "config" "local_vip" "ENABLE_LOCAL_VIP"
 
 	append_param_boolenv "config" "follow_source_order" "FOLLOW_SOURCE_ORDER"
 	append_param_boolenv "config" "search_album" "SEARCH_ALBUM"
@@ -131,7 +135,6 @@ start_service() {
 	append_param_boolenv "config" "select_max_br" "SELECT_MAX_BR"
 	append_param_boolenv "config" "disable_upgrade_check" "DISABLE_UPGRADE_CHECK"
 	append_param_boolenv "config" "block_ads" "BLOCK_ADS"
-	append_param_boolenv "config" "local_vip" "ENABLE_LOCAL_VIP"
 	case "$(config_get "config" "replace_music_source")" in
 		"lower_than_192kbps") procd_append_param env MIN_BR="192000" ;;
 		"lower_than_320kbps") procd_append_param env MIN_BR="320000" ;;
@@ -164,8 +167,8 @@ start_service() {
 		ipset create "neteasemusic" hash:ip
 		config_foreach append_filter_client "acl_rule"
 
-		local netease_music_ips="$(uclient-fetch -qO- "http://httpdns.n.netease.com/httpdns/v2/d?domain=music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.data.*.ip.*')"
-		local netease_music_ips2="$(uclient-fetch -qO- "https://music.httpdns.c.163.com/d" --post-data="music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.dns.*["ips"].*')"
+		local netease_music_ips="$(wget -qO- "http://httpdns.n.netease.com/httpdns/v2/d?domain=music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.data.*.ip.*')"
+		local netease_music_ips2="$(wget -qO- "https://music.httpdns.c.163.com/d" --post-data="music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.dns.*["ips"].*')"
 		echo -e "${netease_music_ips}\n${netease_music_ips2}" | sort -u | awk '{print "ipset add neteasemusic "$1}' | sh
 
 		$IPT_N -N "netease_cloud_music"

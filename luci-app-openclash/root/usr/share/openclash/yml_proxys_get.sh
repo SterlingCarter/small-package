@@ -24,9 +24,9 @@ ruby_read()
    ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "$RUBY_YAML_PARSE" 2>/dev/null
 }
 
-CONFIG_FILE=$(uci get openclash.config.config_path 2>/dev/null)
+CONFIG_FILE=$(uci -q get openclash.config.config_path)
 CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
-UPDATE_CONFIG_FILE=$(uci get openclash.config.config_update_path 2>/dev/null)
+UPDATE_CONFIG_FILE=$(uci -q get openclash.config.config_update_path)
 UPDATE_CONFIG_NAME=$(echo "$UPDATE_CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
 LOGTIME=$(echo $(date "+%Y-%m-%d %H:%M:%S"))
 LOG_FILE="/tmp/openclash.log"
@@ -38,8 +38,14 @@ if [ ! -z "$UPDATE_CONFIG_FILE" ]; then
 fi
 
 if [ -z "$CONFIG_FILE" ]; then
-	CONFIG_FILE="/etc/openclash/config/$(ls -lt /etc/openclash/config/ | grep -E '.yaml|.yml' | head -n 1 |awk '{print $9}')"
-	CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
+   for file_name in /etc/openclash/config/*
+   do
+      if [ -f "$file_name" ]; then
+         CONFIG_FILE=$file_name
+         CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
+         break
+      fi
+   done
 fi
 
 if [ -z "$CONFIG_NAME" ]; then
@@ -62,8 +68,8 @@ proxy_hash=$(ruby_read "$CONFIG_FILE" ".select {|x| 'proxies' == x or 'proxy-pro
 CFG_FILE="/etc/config/openclash"
 match_servers="/tmp/match_servers.list"
 match_provider="/tmp/match_provider.list"
-servers_update=$(uci get openclash.config.servers_update 2>/dev/null)
-servers_if_update=$(uci get openclash.config.servers_if_update 2>/dev/null)
+servers_update=$(uci -q get openclash.config.servers_update)
+servers_if_update=$(uci -q get openclash.config.servers_if_update)
 
 #proxy
 num=$(ruby_read_hash "$proxy_hash" "['proxies'].count")
@@ -236,7 +242,7 @@ do
    Thread.new{
    #gen_interval
    if Value['proxy-providers'].values[$provider_count].key?('interval') then
-      provider_gen_interval = '${uci_set}provider_interval=' + Value['proxy-providers'].values[$provider_count]['interval'].to_s
+      provider_gen_interval = '${uci_set}provider_interval=\"' + Value['proxy-providers'].values[$provider_count]['interval'].to_s + '\"'
       system(provider_gen_interval)
    end
    }.join;
@@ -244,7 +250,7 @@ do
    Thread.new{
    #filter
    if Value['proxy-providers'].values[$provider_count].key?('filter') then
-      provider_gen_filter = '${uci_set}provider_filter=' + Value['proxy-providers'].values[$provider_count]['filter'].to_s
+      provider_gen_filter = '${uci_set}provider_filter=\"' + Value['proxy-providers'].values[$provider_count]['filter'].to_s + '\"'
       system(provider_gen_filter)
    end
    }.join;
@@ -253,7 +259,7 @@ do
    #che_enable
    if Value['proxy-providers'].values[$provider_count].key?('health-check') then
       if Value['proxy-providers'].values[$provider_count]['health-check'].key?('enable') then
-         provider_che_enable = '${uci_set}health_check=' + Value['proxy-providers'].values[$provider_count]['health-check']['enable'].to_s
+         provider_che_enable = '${uci_set}health_check=\"' + Value['proxy-providers'].values[$provider_count]['health-check']['enable'].to_s + '\"'
          system(provider_che_enable)
       end
    end
@@ -273,7 +279,7 @@ do
    #che_interval
    if Value['proxy-providers'].values[$provider_count].key?('health-check') then
       if Value['proxy-providers'].values[$provider_count]['health-check'].key?('interval') then
-         provider_che_interval = '${uci_set}health_check_interval=' + Value['proxy-providers'].values[$provider_count]['health-check']['interval'].to_s
+         provider_che_interval = '${uci_set}health_check_interval=\"' + Value['proxy-providers'].values[$provider_count]['health-check']['interval'].to_s + '\"'
          system(provider_che_interval)
       end
    end
@@ -423,7 +429,7 @@ do
    Thread.new{
    #port
    if Value['proxies'][$count].key?('port') then
-      port = '${uci_set}port=' + Value['proxies'][$count]['port'].to_s
+      port = '${uci_set}port=\"' + Value['proxies'][$count]['port'].to_s + '\"'
       system(port)
    end
    }.join;
@@ -431,7 +437,7 @@ do
    Thread.new{
    #udp
    if Value['proxies'][$count].key?('udp') then
-      udp = '${uci_set}udp=' + Value['proxies'][$count]['udp'].to_s
+      udp = '${uci_set}udp=\"' + Value['proxies'][$count]['udp'].to_s + '\"'
       system(udp)
    end
    }.join;
@@ -439,7 +445,7 @@ do
    Thread.new{
    #interface-name
    if Value['proxies'][$count].key?('interface-name') then
-      interface_name = '${uci_set}interface_name=' + Value['proxies'][$count]['interface-name'].to_s
+      interface_name = '${uci_set}interface_name=\"' + Value['proxies'][$count]['interface-name'].to_s + '\"'
       system(interface_name)
    end
    }.join;
@@ -447,7 +453,7 @@ do
    Thread.new{
    #routing-mark
    if Value['proxies'][$count].key?('routing-mark') then
-      routing_mark = '${uci_set}routing_mark=' + Value['proxies'][$count]['routing-mark'].to_s
+      routing_mark = '${uci_set}routing_mark=\"' + Value['proxies'][$count]['routing-mark'].to_s + '\"'
       system(routing_mark)
    end
    }.join;
@@ -455,7 +461,7 @@ do
    Thread.new{
       #ip_version
       if Value['proxies'][$count].key?('ip-version') then
-         ip_version = '${uci_set}ip_version=' + Value['proxies'][$count]['ip-version'].to_s
+         ip_version = '${uci_set}ip_version=\"' + Value['proxies'][$count]['ip-version'].to_s + '\"'
          system(ip_version)
       end
    }.join
@@ -463,16 +469,61 @@ do
    Thread.new{
       #TFO
       if Value['proxies'][$count].key?('tfo') then
-         tfo = '${uci_set}tfo=' + Value['proxies'][$count]['tfo'].to_s
+         tfo = '${uci_set}tfo=\"' + Value['proxies'][$count]['tfo'].to_s + '\"'
          system(tfo)
       end
+   }.join
+
+   Thread.new{
+      #Multiplex
+      if Value['proxies'][$count].key?('smux') then
+         if Value['proxies'][$count]['smux'].key?('enabled') then
+            smux = '${uci_set}multiplex=\"' + Value['proxies'][$count]['smux']['enabled'].to_s + '\"'
+            system(smux)
+         end;
+         #multiplex_protocol
+         if Value['proxies'][$count]['smux'].key?('protocol') then
+            multiplex_protocol = '${uci_set}multiplex_protocol=\"' + Value['proxies'][$count]['smux']['protocol'].to_s + '\"'
+            system(multiplex_protocol)
+         end;
+         #multiplex_max_connections
+         if Value['proxies'][$count]['smux'].key?('max-connections') then
+            multiplex_max_connections = '${uci_set}multiplex_max_connections=\"' + Value['proxies'][$count]['smux']['max-connections'].to_s + '\"'
+            system(multiplex_max_connections)
+         end;
+         #multiplex_min_streams
+         if Value['proxies'][$count]['smux'].key?('min-streams') then
+            multiplex_min_streams = '${uci_set}multiplex_min_streams=\"' + Value['proxies'][$count]['smux']['min-streams'].to_s + '\"'
+            system(multiplex_min_streams)
+         end;
+         #multiplex_max_streams
+         if Value['proxies'][$count]['smux'].key?('max-streams') then
+            multiplex_max_streams = '${uci_set}multiplex_max_streams=\"' + Value['proxies'][$count]['smux']['max-streams'].to_s + '\"'
+            system(multiplex_max_streams)
+         end;
+         #multiplex_padding
+         if Value['proxies'][$count]['smux'].key?('padding') then
+            multiplex_padding = '${uci_set}multiplex_padding=\"' + Value['proxies'][$count]['smux']['padding'].to_s + '\"'
+            system(multiplex_padding)
+         end;
+         #multiplex_statistic
+         if Value['proxies'][$count]['smux'].key?('statistic') then
+            multiplex_statistic = '${uci_set}multiplex_statistic=\"' + Value['proxies'][$count]['smux']['statistic'].to_s + '\"'
+            system(multiplex_statistic)
+         end;
+         #multiplex_only_tcp
+         if Value['proxies'][$count]['smux'].key?('only-tcp') then
+            multiplex_only_tcp = '${uci_set}multiplex_only_tcp=\"' + Value['proxies'][$count]['smux']['only-tcp'].to_s + '\"'
+            system(multiplex_only_tcp)
+         end;
+      end;
    }.join
 
    if '$server_type' == 'ss' then
       Thread.new{
       #cipher
       if Value['proxies'][$count].key?('cipher') then
-         cipher = '${uci_set}cipher=' + Value['proxies'][$count]['cipher'].to_s
+         cipher = '${uci_set}cipher=\"' + Value['proxies'][$count]['cipher'].to_s + '\"'
          system(cipher)
       end
       }.join
@@ -480,7 +531,7 @@ do
       Thread.new{
       #udp-over-tcp
       if Value['proxies'][$count].key?('udp-over-tcp') then
-         udp_over_tcp = '${uci_set}udp_over_tcp=' + Value['proxies'][$count]['udp-over-tcp'].to_s
+         udp_over_tcp = '${uci_set}udp_over_tcp=\"' + Value['proxies'][$count]['udp-over-tcp'].to_s + '\"'
          system(udp_over_tcp)
       end
       }.join
@@ -490,7 +541,7 @@ do
       if Value['proxies'][$count].key?('plugin-opts') then
          #mode
          if Value['proxies'][$count]['plugin-opts'].key?('mode') then
-            mode = '${uci_set}obfs=' + Value['proxies'][$count]['plugin-opts']['mode'].to_s
+            mode = '${uci_set}obfs=\"' + Value['proxies'][$count]['plugin-opts']['mode'].to_s + '\"'
             system(mode)
          else
             mode = '${uci_set}obfs=none'
@@ -503,7 +554,7 @@ do
          end
          #fingerprint
          if Value['proxies'][$count]['plugin-opts'].key?('fingerprint') then
-            fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['plugin-opts']['fingerprint'].to_s
+            fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['plugin-opts']['fingerprint'].to_s + '\"'
             system(fingerprint)
          end
          if Value['proxies'][$count]['plugin'].to_s == 'v2ray-plugin' then
@@ -514,7 +565,7 @@ do
             end
             #mux
             if Value['proxies'][$count]['plugin-opts'].key?('mux') then
-               mux = '${uci_set}mux=' + Value['proxies'][$count]['plugin-opts']['mux'].to_s
+               mux = '${uci_set}mux=\"' + Value['proxies'][$count]['plugin-opts']['mux'].to_s + '\"'
                system(mux)
             end
             #headers
@@ -526,22 +577,41 @@ do
             end
             #tls
             if Value['proxies'][$count]['plugin-opts'].key?('tls') then
-               tls = '${uci_set}tls=' + Value['proxies'][$count]['plugin-opts']['tls'].to_s
+               tls = '${uci_set}tls=\"' + Value['proxies'][$count]['plugin-opts']['tls'].to_s + '\"'
                system(tls)
             end
             #skip-cert-verify
             if Value['proxies'][$count]['plugin-opts'].key?('skip-cert-verify') then
-               skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['plugin-opts']['skip-cert-verify'].to_s
+               skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['plugin-opts']['skip-cert-verify'].to_s + '\"'
                system(skip_cert_verify)
             end
-         end
+         end;
          if Value['proxies'][$count]['plugin'].to_s == 'shadow-tls' then
-            mode = '${uci_set}obfs=' + Value['proxies'][$count]['plugin'].to_s
+            mode = '${uci_set}obfs=\"' + Value['proxies'][$count]['plugin'].to_s + '\"'
             system(mode)
             #password
             if Value['proxies'][$count]['plugin-opts'].key?('password') then
                obfs_password = '${uci_set}obfs_password=\"' + Value['proxies'][$count]['plugin-opts']['password'].to_s + '\"'
                system(obfs_password)
+            end
+         end;
+         if Value['proxies'][$count]['plugin'].to_s == 'restls' then
+            mode = '${uci_set}obfs=\"' + Value['proxies'][$count]['plugin'].to_s + '\"'
+            system(mode)
+            #password
+            if Value['proxies'][$count]['plugin-opts'].key?('password') then
+               obfs_password = '${uci_set}obfs_password=\"' + Value['proxies'][$count]['plugin-opts']['password'].to_s + '\"'
+               system(obfs_password)
+            end
+            #version-hint
+            if Value['proxies'][$count]['plugin-opts'].key?('version-hint') then
+               obfs_version_hint = '${uci_set}obfs_version_hint=\"' + Value['proxies'][$count]['plugin-opts']['version-hint'].to_s + '\"'
+               system(obfs_version_hint)
+            end
+            #restls-script
+            if Value['proxies'][$count]['plugin-opts'].key?('restls-script') then
+               obfs_restls_script = '${uci_set}obfs_restls_script=\"' + Value['proxies'][$count]['plugin-opts']['restls-script'].to_s + '\"'
+               system(obfs_restls_script)
             end
          end;
       end
@@ -554,7 +624,7 @@ do
          if Value['proxies'][$count]['cipher'].to_s == 'none' then
             cipher = '${uci_set}cipher_ssr=dummy'
          else
-            cipher = '${uci_set}cipher_ssr=' + Value['proxies'][$count]['cipher'].to_s
+            cipher = '${uci_set}cipher_ssr=\"' + Value['proxies'][$count]['cipher'].to_s + '\"'
          end
          system(cipher)
       end
@@ -563,7 +633,7 @@ do
       Thread.new{
       #obfs
       if Value['proxies'][$count].key?('obfs') then
-         obfs = '${uci_set}obfs_ssr=' + Value['proxies'][$count]['obfs'].to_s
+         obfs = '${uci_set}obfs_ssr=\"' + Value['proxies'][$count]['obfs'].to_s + '\"'
          system(obfs)
       end
       }.join
@@ -571,7 +641,7 @@ do
       Thread.new{
       #protocol
       if Value['proxies'][$count].key?('protocol') then
-         protocol = '${uci_set}protocol=' + Value['proxies'][$count]['protocol'].to_s
+         protocol = '${uci_set}protocol=\"' + Value['proxies'][$count]['protocol'].to_s + '\"'
          system(protocol)
       end
       }.join
@@ -596,7 +666,7 @@ do
       Thread.new{
       #uuid
       if Value['proxies'][$count].key?('uuid') then
-         uuid = '${uci_set}uuid=' + Value['proxies'][$count]['uuid'].to_s
+         uuid = '${uci_set}uuid=\"' + Value['proxies'][$count]['uuid'].to_s + '\"'
          system(uuid)
       end
       }.join
@@ -604,7 +674,7 @@ do
       Thread.new{
       #alterId
       if Value['proxies'][$count].key?('alterId') then
-         alterId = '${uci_set}alterId=' + Value['proxies'][$count]['alterId'].to_s
+         alterId = '${uci_set}alterId=\"' + Value['proxies'][$count]['alterId'].to_s + '\"'
          system(alterId)
       end
       }.join
@@ -612,7 +682,7 @@ do
       Thread.new{
       #cipher
       if Value['proxies'][$count].key?('cipher') then
-         cipher = '${uci_set}securitys=' + Value['proxies'][$count]['cipher'].to_s
+         cipher = '${uci_set}securitys=\"' + Value['proxies'][$count]['cipher'].to_s + '\"'
          system(cipher)
       end
       }.join
@@ -620,7 +690,7 @@ do
       Thread.new{
       #xudp
       if Value['proxies'][$count].key?('xudp') then
-         xudp = '${uci_set}xudp=' + Value['proxies'][$count]['xudp'].to_s
+         xudp = '${uci_set}xudp=\"' + Value['proxies'][$count]['xudp'].to_s + '\"'
          system(xudp)
       end
       }.join;
@@ -628,7 +698,7 @@ do
       Thread.new{
       #packet_encoding
       if Value['proxies'][$count].key?('packet-encoding') then
-         packet_encoding = '${uci_set}packet_encoding=' + Value['proxies'][$count]['packet-encoding'].to_s
+         packet_encoding = '${uci_set}packet_encoding=\"' + Value['proxies'][$count]['packet-encoding'].to_s + '\"'
          system(packet_encoding)
       end
       }.join;
@@ -636,7 +706,7 @@ do
       Thread.new{
       #GlobalPadding
       if Value['proxies'][$count].key?('global-padding') then
-         global_padding = '${uci_set}global_padding=' + Value['proxies'][$count]['global-padding'].to_s
+         global_padding = '${uci_set}global_padding=\"' + Value['proxies'][$count]['global-padding'].to_s + '\"'
          system(global_padding)
       end
       }.join;
@@ -644,7 +714,7 @@ do
       Thread.new{
       #authenticated_length
       if Value['proxies'][$count].key?('authenticated-length') then
-         authenticated_length = '${uci_set}authenticated_length=' + Value['proxies'][$count]['authenticated-length'].to_s
+         authenticated_length = '${uci_set}authenticated_length=\"' + Value['proxies'][$count]['authenticated-length'].to_s + '\"'
          system(authenticated_length)
       end
       }.join;
@@ -652,7 +722,7 @@ do
       Thread.new{
       #tls
       if Value['proxies'][$count].key?('tls') then
-         tls = '${uci_set}tls=' + Value['proxies'][$count]['tls'].to_s
+         tls = '${uci_set}tls=\"' + Value['proxies'][$count]['tls'].to_s + '\"'
          system(tls)
       end
       }.join
@@ -660,7 +730,7 @@ do
       Thread.new{
       #skip-cert-verify
       if Value['proxies'][$count].key?('skip-cert-verify') then
-         skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['skip-cert-verify'].to_s
+         skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['skip-cert-verify'].to_s + '\"'
          system(skip_cert_verify)
       end
       }.join
@@ -676,7 +746,7 @@ do
       Thread.new{
       #fingerprint
       if Value['proxies'][$count].key?('fingerprint') then
-         fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['fingerprint'].to_s
+         fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['fingerprint'].to_s + '\"'
          system(fingerprint)
       end
       }.join
@@ -684,7 +754,7 @@ do
       Thread.new{
       #client_fingerprint
       if Value['proxies'][$count].key?('client-fingerprint') then
-         client_fingerprint = '${uci_set}client_fingerprint=' + Value['proxies'][$count]['client-fingerprint'].to_s
+         client_fingerprint = '${uci_set}client_fingerprint=\"' + Value['proxies'][$count]['client-fingerprint'].to_s + '\"'
          system(client_fingerprint)
       end
       }.join
@@ -793,7 +863,7 @@ do
       Thread.new{
       #tc_ip
       if Value['proxies'][$count].key?('ip') then
-         tc_ip = '${uci_set}tc_ip=' + Value['proxies'][$count]['ip'].to_s
+         tc_ip = '${uci_set}tc_ip=\"' + Value['proxies'][$count]['ip'].to_s + '\"'
          system(tc_ip)
       end
       }.join
@@ -801,7 +871,7 @@ do
       Thread.new{
       #tc_token
       if Value['proxies'][$count].key?('token') then
-         tc_token = '${uci_set}tc_token=' + Value['proxies'][$count]['token'].to_s
+         tc_token = '${uci_set}tc_token=\"' + Value['proxies'][$count]['token'].to_s + '\"'
          system(tc_token)
       end
       }.join
@@ -809,7 +879,7 @@ do
       Thread.new{
       #heartbeat_interval
       if Value['proxies'][$count].key?('heartbeat-interval') then
-         heartbeat_interval = '${uci_set}heartbeat_interval=' + Value['proxies'][$count]['heartbeat-interval'].to_s
+         heartbeat_interval = '${uci_set}heartbeat_interval=\"' + Value['proxies'][$count]['heartbeat-interval'].to_s + '\"'
          system(heartbeat_interval)
       end
       }.join
@@ -829,7 +899,7 @@ do
       Thread.new{
       #disable_sni
       if Value['proxies'][$count].key?('disable-sni') then
-         disable_sni = '${uci_set}disable_sni=' + Value['proxies'][$count]['disable-sni'].to_s
+         disable_sni = '${uci_set}disable_sni=\"' + Value['proxies'][$count]['disable-sni'].to_s + '\"'
          system(disable_sni)
       end
       }.join
@@ -837,7 +907,7 @@ do
       Thread.new{
       #reduce_rtt
       if Value['proxies'][$count].key?('reduce-rtt') then
-         reduce_rtt = '${uci_set}reduce_rtt=' + Value['proxies'][$count]['reduce-rtt'].to_s
+         reduce_rtt = '${uci_set}reduce_rtt=\"' + Value['proxies'][$count]['reduce-rtt'].to_s + '\"'
          system(reduce_rtt)
       end
       }.join
@@ -845,7 +915,7 @@ do
       Thread.new{
       #fast_open
       if Value['proxies'][$count].key?('fast-open') then
-         fast_open = '${uci_set}fast_open=' + Value['proxies'][$count]['fast-open'].to_s
+         fast_open = '${uci_set}fast_open=\"' + Value['proxies'][$count]['fast-open'].to_s + '\"'
          system(fast_open)
       end
       }.join
@@ -853,7 +923,7 @@ do
       Thread.new{
       #request_timeout
       if Value['proxies'][$count].key?('request-timeout') then
-         request_timeout = '${uci_set}request_timeout=' + Value['proxies'][$count]['request-timeout'].to_s
+         request_timeout = '${uci_set}request_timeout=\"' + Value['proxies'][$count]['request-timeout'].to_s + '\"'
          system(request_timeout)
       end
       }.join
@@ -861,7 +931,7 @@ do
       Thread.new{
       #udp_relay_mode
       if Value['proxies'][$count].key?('udp-relay-mode') then
-         udp_relay_mode = '${uci_set}udp_relay_mode=' + Value['proxies'][$count]['udp-relay-mode'].to_s
+         udp_relay_mode = '${uci_set}udp_relay_mode=\"' + Value['proxies'][$count]['udp-relay-mode'].to_s + '\"'
          system(udp_relay_mode)
       end
       }.join
@@ -869,7 +939,7 @@ do
       Thread.new{
       #congestion_controller
       if Value['proxies'][$count].key?('congestion-controller') then
-         congestion_controller = '${uci_set}congestion_controller=' + Value['proxies'][$count]['congestion-controller'].to_s
+         congestion_controller = '${uci_set}congestion_controller=\"' + Value['proxies'][$count]['congestion-controller'].to_s + '\"'
          system(congestion_controller)
       end
       }.join
@@ -877,7 +947,7 @@ do
       Thread.new{
       #max_udp_relay_packet_size
       if Value['proxies'][$count].key?('max-udp-relay-packet-size') then
-         max_udp_relay_packet_size = '${uci_set}max_udp_relay_packet_size=' + Value['proxies'][$count]['max-udp-relay-packet-size'].to_s
+         max_udp_relay_packet_size = '${uci_set}max_udp_relay_packet_size=\"' + Value['proxies'][$count]['max-udp-relay-packet-size'].to_s + '\"'
          system(max_udp_relay_packet_size)
       end
       }.join
@@ -885,7 +955,7 @@ do
       Thread.new{
       #max-open-streams
       if Value['proxies'][$count].key?('max-open-streams') then
-         max_open_streams = '${uci_set}max_open_streams=' + Value['proxies'][$count]['max-open-streams'].to_s
+         max_open_streams = '${uci_set}max_open_streams=\"' + Value['proxies'][$count]['max-open-streams'].to_s + '\"'
          system(max_open_streams)
       end
       }.join
@@ -896,7 +966,7 @@ do
       Thread.new{
       #wg_ip
       if Value['proxies'][$count].key?('ip') then
-         wg_ip = '${uci_set}wg_ip=' + Value['proxies'][$count]['ip'].to_s
+         wg_ip = '${uci_set}wg_ip=\"' + Value['proxies'][$count]['ip'].to_s + '\"'
          system(wg_ip)
       end
       }.join
@@ -904,7 +974,7 @@ do
       Thread.new{
       #wg_ipv6
       if Value['proxies'][$count].key?('ipv6') then
-         wg_ipv6 = '${uci_set}wg_ipv6=' + Value['proxies'][$count]['ipv6'].to_s
+         wg_ipv6 = '${uci_set}wg_ipv6=\"' + Value['proxies'][$count]['ipv6'].to_s + '\"'
          system(wg_ipv6)
       end
       }.join
@@ -912,7 +982,7 @@ do
       Thread.new{
       #private_key
       if Value['proxies'][$count].key?('private-key') then
-         private_key = '${uci_set}private_key=' + Value['proxies'][$count]['private-key'].to_s
+         private_key = '${uci_set}private_key=\"' + Value['proxies'][$count]['private-key'].to_s + '\"'
          system(private_key)
       end
       }.join
@@ -920,7 +990,7 @@ do
       Thread.new{
       #public_key
       if Value['proxies'][$count].key?('public-key') then
-         public_key = '${uci_set}public_key=' + Value['proxies'][$count]['public-key'].to_s
+         public_key = '${uci_set}public_key=\"' + Value['proxies'][$count]['public-key'].to_s + '\"'
          system(public_key)
       end
       }.join
@@ -928,7 +998,7 @@ do
       Thread.new{
       #preshared_key
       if Value['proxies'][$count].key?('preshared-key') then
-         preshared_key = '${uci_set}preshared_key=' + Value['proxies'][$count]['preshared-key'].to_s
+         preshared_key = '${uci_set}preshared_key=\"' + Value['proxies'][$count]['preshared-key'].to_s + '\"'
          system(preshared_key)
       end
       }.join
@@ -936,7 +1006,7 @@ do
       Thread.new{
       #wg_mtu
       if Value['proxies'][$count].key?('mtu') then
-         wg_mtu = '${uci_set}wg_mtu=' + Value['proxies'][$count]['mtu'].to_s
+         wg_mtu = '${uci_set}wg_mtu=\"' + Value['proxies'][$count]['mtu'].to_s + '\"'
          system(wg_mtu)
       end
       }.join
@@ -954,11 +1024,11 @@ do
       }.join
    end;
 
-   if '$server_type' == 'hysteria' then
+   if '$server_type' == 'hysteria' or '$server_type' == 'hysteria2' then
       Thread.new{
       #hysteria_protocol
       if Value['proxies'][$count].key?('protocol') then
-         hysteria_protocol = '${uci_set}hysteria_protocol=' + Value['proxies'][$count]['protocol'].to_s
+         hysteria_protocol = '${uci_set}hysteria_protocol=\"' + Value['proxies'][$count]['protocol'].to_s + '\"'
          system(hysteria_protocol)
       end
       }.join
@@ -966,7 +1036,7 @@ do
       Thread.new{
       #hysteria_up
       if Value['proxies'][$count].key?('up') then
-         hysteria_up = '${uci_set}hysteria_up=' + Value['proxies'][$count]['up'].to_s
+         hysteria_up = '${uci_set}hysteria_up=\"' + Value['proxies'][$count]['up'].to_s + '\"'
          system(hysteria_up)
       end
       }.join
@@ -974,7 +1044,7 @@ do
       Thread.new{
       #hysteria_down
       if Value['proxies'][$count].key?('down') then
-         hysteria_down = '${uci_set}hysteria_down=' + Value['proxies'][$count]['down'].to_s
+         hysteria_down = '${uci_set}hysteria_down=\"' + Value['proxies'][$count]['down'].to_s + '\"'
          system(hysteria_down)
       end
       }.join
@@ -982,7 +1052,7 @@ do
       Thread.new{
       #skip-cert-verify
       if Value['proxies'][$count].key?('skip-cert-verify') then
-         skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['skip-cert-verify'].to_s
+         skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['skip-cert-verify'].to_s + '\"'
          system(skip_cert_verify)
       end
       }.join
@@ -1015,7 +1085,7 @@ do
       Thread.new{
       #recv_window_conn
       if Value['proxies'][$count].key?('recv-window-conn') then
-         recv_window_conn = '${uci_set}recv_window_conn=' + Value['proxies'][$count]['recv-window-conn'].to_s
+         recv_window_conn = '${uci_set}recv_window_conn=\"' + Value['proxies'][$count]['recv-window-conn'].to_s + '\"'
          system(recv_window_conn)
       end
       }.join
@@ -1023,7 +1093,7 @@ do
       Thread.new{
       #recv_window
       if Value['proxies'][$count].key?('recv-window') then
-         recv_window = '${uci_set}recv_window=' + Value['proxies'][$count]['recv-window'].to_s
+         recv_window = '${uci_set}recv_window=\"' + Value['proxies'][$count]['recv-window'].to_s + '\"'
          system(recv_window)
       end
       }.join
@@ -1031,15 +1101,23 @@ do
       Thread.new{
       #hysteria_obfs
       if Value['proxies'][$count].key?('obfs') then
-         hysteria_obfs = '${uci_set}hysteria_obfs=' + Value['proxies'][$count]['obfs'].to_s
+         hysteria_obfs = '${uci_set}hysteria_obfs=\"' + Value['proxies'][$count]['obfs'].to_s + '\"'
          system(hysteria_obfs)
+      end
+      }.join
+
+      Thread.new{
+      #hysteria_obfs_password
+      if Value['proxies'][$count].key?('obfs-password') then
+         hysteria_obfs_password = '${uci_set}hysteria_obfs_password=\"' + Value['proxies'][$count]['obfs-password'].to_s + '\"'
+         system(hysteria_obfs_password)
       end
       }.join
 
       Thread.new{
       #hysteria_auth
       if Value['proxies'][$count].key?('auth') then
-         hysteria_auth = '${uci_set}hysteria_auth=' + Value['proxies'][$count]['auth'].to_s
+         hysteria_auth = '${uci_set}hysteria_auth=\"' + Value['proxies'][$count]['auth'].to_s + '\"'
          system(hysteria_auth)
       end
       }.join
@@ -1047,7 +1125,7 @@ do
       Thread.new{
       #hysteria_auth_str
       if Value['proxies'][$count].key?('auth-str') then
-         hysteria_auth_str = '${uci_set}hysteria_auth_str=' + Value['proxies'][$count]['auth-str'].to_s
+         hysteria_auth_str = '${uci_set}hysteria_auth_str=\"' + Value['proxies'][$count]['auth-str'].to_s + '\"'
          system(hysteria_auth_str)
       end
       }.join
@@ -1055,7 +1133,7 @@ do
       Thread.new{
       #hysteria_ca
       if Value['proxies'][$count].key?('ca') then
-         hysteria_ca = '${uci_set}hysteria_ca=' + Value['proxies'][$count]['ca'].to_s
+         hysteria_ca = '${uci_set}hysteria_ca=\"' + Value['proxies'][$count]['ca'].to_s + '\"'
          system(hysteria_ca)
       end
       }.join
@@ -1063,7 +1141,7 @@ do
       Thread.new{
       #hysteria_ca_str
       if Value['proxies'][$count].key?('ca-str') then
-         hysteria_ca_str = '${uci_set}hysteria_ca_str=' + Value['proxies'][$count]['ca-str'].to_s
+         hysteria_ca_str = '${uci_set}hysteria_ca_str=\"' + Value['proxies'][$count]['ca-str'].to_s + '\"'
          system(hysteria_ca_str)
       end
       }.join
@@ -1071,7 +1149,7 @@ do
       Thread.new{
       #disable_mtu_discovery
       if Value['proxies'][$count].key?('disable-mtu-discovery') then
-         disable_mtu_discovery = '${uci_set}disable_mtu_discovery=' + Value['proxies'][$count]['disable-mtu-discovery'].to_s
+         disable_mtu_discovery = '${uci_set}disable_mtu_discovery=\"' + Value['proxies'][$count]['disable-mtu-discovery'].to_s + '\"'
          system(disable_mtu_discovery)
       end
       }.join
@@ -1079,7 +1157,7 @@ do
       Thread.new{
       #fast_open
       if Value['proxies'][$count].key?('fast-open') then
-         fast_open = '${uci_set}fast_open=' + Value['proxies'][$count]['fast-open'].to_s
+         fast_open = '${uci_set}fast_open=\"' + Value['proxies'][$count]['fast-open'].to_s + '\"'
          system(fast_open)
       end
       }.join
@@ -1087,7 +1165,7 @@ do
       Thread.new{
       #fingerprint
       if Value['proxies'][$count].key?('fingerprint') then
-         fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['fingerprint'].to_s
+         fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['fingerprint'].to_s + '\"'
          system(fingerprint)
       end
       }.join
@@ -1095,7 +1173,7 @@ do
       Thread.new{
       #ports
       if Value['proxies'][$count].key?('ports') then
-         ports = '${uci_set}ports=' + Value['proxies'][$count]['ports'].to_s
+         ports = '${uci_set}ports=\"' + Value['proxies'][$count]['ports'].to_s + '\"'
          system(ports)
       end
       }.join
@@ -1103,7 +1181,7 @@ do
       Thread.new{
       #hop-interval
       if Value['proxies'][$count].key?('hop-interval') then
-         hop_interval = '${uci_set}hop_interval=' + Value['proxies'][$count]['hop-interval'].to_s
+         hop_interval = '${uci_set}hop_interval=\"' + Value['proxies'][$count]['hop-interval'].to_s + '\"'
          system(hop_interval)
       end
       }.join
@@ -1113,7 +1191,7 @@ do
       Thread.new{
       #uuid
       if Value['proxies'][$count].key?('uuid') then
-         uuid = '${uci_set}uuid=' + Value['proxies'][$count]['uuid'].to_s
+         uuid = '${uci_set}uuid=\"' + Value['proxies'][$count]['uuid'].to_s + '\"'
          system(uuid)
       end
       }.join
@@ -1121,7 +1199,7 @@ do
       Thread.new{
       #tls
       if Value['proxies'][$count].key?('tls') then
-         tls = '${uci_set}tls=' + Value['proxies'][$count]['tls'].to_s
+         tls = '${uci_set}tls=\"' + Value['proxies'][$count]['tls'].to_s + '\"'
          system(tls)
       end
       }.join
@@ -1129,7 +1207,7 @@ do
       Thread.new{
       #skip-cert-verify
       if Value['proxies'][$count].key?('skip-cert-verify') then
-         skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['skip-cert-verify'].to_s
+         skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['skip-cert-verify'].to_s + '\"'
          system(skip_cert_verify)
       end
       }.join
@@ -1209,7 +1287,7 @@ do
       Thread.new{
       #xudp
       if Value['proxies'][$count].key?('xudp') then
-         xudp = '${uci_set}xudp=' + Value['proxies'][$count]['xudp'].to_s
+         xudp = '${uci_set}xudp=\"' + Value['proxies'][$count]['xudp'].to_s + '\"'
          system(xudp)
       end
       }.join;
@@ -1217,7 +1295,7 @@ do
       Thread.new{
       #packet-addr
       if Value['proxies'][$count].key?('packet-addr') then
-         packet_addr = '${uci_set}packet_addr=' + Value['proxies'][$count]['packet-addr'].to_s
+         packet_addr = '${uci_set}packet_addr=\"' + Value['proxies'][$count]['packet-addr'].to_s + '\"'
          system(packet_addr)
       end
       }.join;
@@ -1225,7 +1303,7 @@ do
       Thread.new{
       #packet_encoding
       if Value['proxies'][$count].key?('packet-encoding') then
-         packet_encoding = '${uci_set}packet_encoding=' + Value['proxies'][$count]['packet-encoding'].to_s
+         packet_encoding = '${uci_set}packet_encoding=\"' + Value['proxies'][$count]['packet-encoding'].to_s + '\"'
          system(packet_encoding)
       end
       }.join;
@@ -1233,7 +1311,7 @@ do
       Thread.new{
       #fingerprint
       if Value['proxies'][$count].key?('fingerprint') then
-         fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['fingerprint'].to_s
+         fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['fingerprint'].to_s + '\"'
          system(fingerprint)
       end
       }.join
@@ -1241,7 +1319,7 @@ do
       Thread.new{
       #client_fingerprint
       if Value['proxies'][$count].key?('client-fingerprint') then
-         client_fingerprint = '${uci_set}client_fingerprint=' + Value['proxies'][$count]['client-fingerprint'].to_s
+         client_fingerprint = '${uci_set}client_fingerprint=\"' + Value['proxies'][$count]['client-fingerprint'].to_s + '\"'
          system(client_fingerprint)
       end
       }.join
@@ -1251,7 +1329,7 @@ do
       Thread.new{
       if Value['proxies'][$count].key?('obfs-opts') then
          if Value['proxies'][$count]['obfs-opts'].key?('mode') then
-            mode = '${uci_set}obfs_snell=' + Value['proxies'][$count]['obfs-opts']['mode'].to_s
+            mode = '${uci_set}obfs_snell=\"' + Value['proxies'][$count]['obfs-opts']['mode'].to_s + '\"'
             system(mode)
          else
             system '${uci_set}obfs_snell=none'
@@ -1265,14 +1343,14 @@ do
       
       Thread.new{
       if Value['proxies'][$count].key?('psk') then
-         psk = '${uci_set}psk=' + Value['proxies'][$count]['psk'].to_s
+         psk = '${uci_set}psk=\"' + Value['proxies'][$count]['psk'].to_s + '\"'
          system(psk)
       end
       }.join
       
       Thread.new{
       if Value['proxies'][$count].key?('version') then
-         snell_version = '${uci_set}snell_version=' + Value['proxies'][$count]['version'].to_s
+         snell_version = '${uci_set}snell_version=\"' + Value['proxies'][$count]['version'].to_s + '\"'
          system(snell_version)
       end
       }.join
@@ -1296,7 +1374,7 @@ do
       Thread.new{
       #tls
       if Value['proxies'][$count].key?('tls') then
-         tls = '${uci_set}tls=' + Value['proxies'][$count]['tls'].to_s
+         tls = '${uci_set}tls=\"' + Value['proxies'][$count]['tls'].to_s + '\"'
          system(tls)
       end
       }.join
@@ -1304,7 +1382,7 @@ do
       Thread.new{
       #skip-cert-verify
       if Value['proxies'][$count].key?('skip-cert-verify') then
-         skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['skip-cert-verify'].to_s
+         skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['skip-cert-verify'].to_s + '\"'
          system(skip_cert_verify)
       end
       }.join
@@ -1324,7 +1402,7 @@ do
       Thread.new{
       #fingerprint
       if Value['proxies'][$count].key?('fingerprint') then
-         fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['fingerprint'].to_s
+         fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['fingerprint'].to_s + '\"'
          system(fingerprint)
       end
       }.join
@@ -1391,7 +1469,7 @@ do
       Thread.new{
       #skip-cert-verify
       if Value['proxies'][$count].key?('skip-cert-verify') then
-         skip_cert_verify = '${uci_set}skip_cert_verify=' + Value['proxies'][$count]['skip-cert-verify'].to_s
+         skip_cert_verify = '${uci_set}skip_cert_verify=\"' + Value['proxies'][$count]['skip-cert-verify'].to_s + '\"'
          system(skip_cert_verify)
       end
       }.join
@@ -1399,7 +1477,7 @@ do
       Thread.new{
       #fingerprint
       if Value['proxies'][$count].key?('fingerprint') then
-         fingerprint = '${uci_set}fingerprint=' + Value['proxies'][$count]['fingerprint'].to_s
+         fingerprint = '${uci_set}fingerprint=\"' + Value['proxies'][$count]['fingerprint'].to_s + '\"'
          system(fingerprint)
       end
       }.join
@@ -1407,7 +1485,7 @@ do
       Thread.new{
       #client_fingerprint
       if Value['proxies'][$count].key?('client-fingerprint') then
-         client_fingerprint = '${uci_set}client_fingerprint=' + Value['proxies'][$count]['client-fingerprint'].to_s
+         client_fingerprint = '${uci_set}client_fingerprint=\"' + Value['proxies'][$count]['client-fingerprint'].to_s + '\"'
          system(client_fingerprint)
       end
       }.join
@@ -1477,15 +1555,15 @@ if [ "$servers_if_update" = "1" ]; then
         if [ -z "$line" ]; then
            continue
         fi
-        if [ "$(uci get openclash.@servers["$line"].manual 2>/dev/null)" = "0" ] && [ "$(uci get openclash.@servers["$line"].config 2>/dev/null)" = "$CONFIG_NAME" ]; then
-           uci delete openclash.@servers["$line"] 2>/dev/null
+        if [ "$(uci -q get openclash.@servers["$line"].manual)" = "0" ] && [ "$(uci -q get openclash.@servers["$line"].config)" = "$CONFIG_NAME" ]; then
+           uci -q delete openclash.@servers["$line"]
         fi
      done 2>/dev/null
 fi
 
-uci set openclash.config.servers_if_update=0
+uci -q set openclash.config.servers_if_update=0
 wait
-uci commit openclash
+uci -q commit openclash
 LOG_OUT "Config File【$CONFIG_NAME】Read Successful!"
 sleep 3
 SLOG_CLEAN

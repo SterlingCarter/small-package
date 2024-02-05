@@ -1,5 +1,6 @@
 module("luci.passwall.api", package.seeall)
 local com = require "luci.passwall.com"
+bin = require "nixio".bin
 fs = require "nixio.fs"
 sys = require "luci.sys"
 uci = require"luci.model.uci".cursor()
@@ -18,12 +19,12 @@ LOG_FILE = "/tmp/log/" .. appname .. ".log"
 CACHE_PATH = "/tmp/etc/" .. appname .. "_tmp"
 
 function log(...)
-    local result = os.date("%Y-%m-%d %H:%M:%S: ") .. table.concat({...}, " ")
-    local f, err = io.open(LOG_FILE, "a")
-    if f and err == nil then
-        f:write(result .. "\n")
-        f:close()
-    end
+	local result = os.date("%Y-%m-%d %H:%M:%S: ") .. table.concat({...}, " ")
+	local f, err = io.open(LOG_FILE, "a")
+	if f and err == nil then
+		f:write(result .. "\n")
+		f:close()
+	end
 end
 
 function exec_call(cmd)
@@ -103,6 +104,29 @@ end
 
 function trim(s)
 	return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+-- 分割字符串
+function split(full, sep)
+	if full then
+		full = full:gsub("%z", "") -- 这里不是很清楚 有时候结尾带个\0
+		local off, result = 1, {}
+		while true do
+			local nStart, nEnd = full:find(sep, off)
+			if not nEnd then
+				local res = string.sub(full, off, string.len(full))
+				if #res > 0 then -- 过滤掉 \0
+					table.insert(result, res)
+				end
+				break
+			else
+				table.insert(result, string.sub(full, off, nStart - 1))
+				off = nEnd + 1
+			end
+		end
+		return result
+	end
+	return {}
 end
 
 function is_exist(table, value)
@@ -283,13 +307,13 @@ function get_domain_from_url(url)
 end
 
 function get_valid_nodes()
-	local nodes_ping = uci_get_type("global_other", "nodes_ping") or ""
+	local show_node_info = uci_get_type("global_other", "show_node_info") or "0"
 	local nodes = {}
 	uci:foreach(appname, "nodes", function(e)
 		e.id = e[".name"]
 		if e.type and e.remarks then
 			if e.protocol and (e.protocol == "_balancing" or e.protocol == "_shunt" or e.protocol == "_iface") then
-				e["remark"] = "%s：[%s] " % {i18n.translatef(e.type .. e.protocol), e.remarks}
+				e["remark"] = "%s：[%s] " % {e.type .. " " .. i18n.translatef(e.protocol), e.remarks}
 				e["node_type"] = "special"
 				nodes[#nodes + 1] = e
 			end
@@ -297,7 +321,7 @@ function get_valid_nodes()
 				local address = e.address
 				if is_ip(address) or datatypes.hostname(address) then
 					local type = e.type
-					if (type == "V2ray" or type == "Xray") and e.protocol then
+					if (type == "sing-box" or type == "Xray") and e.protocol then
 						local protocol = e.protocol
 						if protocol == "vmess" then
 							protocol = "VMess"
@@ -310,7 +334,7 @@ function get_valid_nodes()
 					end
 					if is_ipv6(address) then address = get_ipv6_full(address) end
 					e["remark"] = "%s：[%s]" % {type, e.remarks}
-					if nodes_ping:find("info") then
+					if show_node_info == "1" then
 						e["remark"] = "%s：[%s] %s:%s" % {type, e.remarks, address, e.port}
 					end
 					e.node_type = "normal"
@@ -322,14 +346,14 @@ function get_valid_nodes()
 	return nodes
 end
 
-function get_full_node_remarks(n)
+function get_node_remarks(n)
 	local remarks = ""
 	if n then
 		if n.protocol and (n.protocol == "_balancing" or n.protocol == "_shunt" or n.protocol == "_iface") then
-			remarks = "%s：[%s] " % {i18n.translatef(n.type .. n.protocol), n.remarks}
+			remarks = "%s：[%s] " % {n.type .. " " .. i18n.translatef(n.protocol), n.remarks}
 		else
 			local type2 = n.type
-			if (n.type == "V2ray" or n.type == "Xray") and n.protocol then
+			if (n.type == "sing-box" or n.type == "Xray") and n.protocol then
 				local protocol = n.protocol
 				if protocol == "vmess" then
 					protocol = "VMess"
@@ -340,7 +364,17 @@ function get_full_node_remarks(n)
 				end
 				type2 = type2 .. " " .. protocol
 			end
-			remarks = "%s：[%s] %s:%s" % {type2, n.remarks, n.address, n.port}
+			remarks = "%s：[%s]" % {type2, n.remarks}
+		end
+	end
+	return remarks
+end
+
+function get_full_node_remarks(n)
+	local remarks = get_node_remarks(n)
+	if #remarks > 0 then
+		if n.address and n.port then
+			remarks = remarks .. " " .. n.address .. ":" .. n.port
 		end
 	end
 	return remarks
@@ -352,6 +386,10 @@ function gen_uuid(format)
 		uuid = string.gsub(uuid, "-", "")
 	end
 	return uuid
+end
+
+function gen_short_uuid()
+	return sys.exec("echo -n $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)")
 end
 
 function uci_get_type(type, config, default)
@@ -382,8 +420,22 @@ function get_customed_path(e)
 	return uci_get_type("global_app", e .. "_file")
 end
 
+function finded_com(e)
+	local bin = get_app_path(e)
+	if not bin then return end
+	local s = luci.sys.exec('echo -n $(type -t -p "%s" | head -n1)' % { bin })
+	if s == "" then
+		s = nil
+	end
+	return s
+end
+
+function finded(e)
+	return luci.sys.exec('echo -n $(type -t -p "/bin/%s" -p "/usr/bin/%s" "%s" | head -n1)' % {e, e, e})
+end
+
 function is_finded(e)
-	return luci.sys.exec('type -t -p "/bin/%s" -p "/usr/bin/%s" -p "%s" "%s"' % {e, e, get_customed_path(e), e}) ~= "" and true or false
+	return finded(e) ~= "" and true or false
 end
 
 function clone(org)
@@ -422,10 +474,12 @@ local function get_bin_version_cache(file, cmd)
 end
 
 function get_app_path(app_name)
-	local def_path = com[app_name].default_path
-	local path = uci_get_type("global_app", app_name:gsub("%-","_") .. "_file")
-	path = path and (#path>0 and path or def_path) or def_path
-	return path
+	if com[app_name] then
+		local def_path = com[app_name].default_path
+		local path = uci_get_type("global_app", app_name:gsub("%-","_") .. "_file")
+		path = path and (#path>0 and path or def_path) or def_path
+		return path
+	end
 end
 
 function get_app_version(app_name, file)
@@ -536,7 +590,7 @@ local function exec(cmd, args, writer, timeout)
 	end
 end
 
-local function compare_versions(ver1, comp, ver2)
+function compare_versions(ver1, comp, ver2)
 	local table = table
 
 	if not ver1 then ver1 = "" end
@@ -598,6 +652,44 @@ local function auto_get_arch()
 	end
 
 	return util.trim(arch)
+end
+
+function parseURL(url)
+	if not url or url == "" then
+		return nil
+	end
+	local pattern = "^(%w+)://"
+	local protocol = url:match(pattern)
+
+	if not protocol then
+		--error("Invalid URL: " .. url)
+		return nil
+	end
+
+	local auth_host_port = url:sub(#protocol + 4)
+	local auth_pattern = "^([^@]+)@"
+	local auth = auth_host_port:match(auth_pattern)
+	local username, password
+
+	if auth then
+		username, password = auth:match("^([^:]+):([^:]+)$")
+		auth_host_port = auth_host_port:sub(#auth + 2)
+	end
+
+	local host, port = auth_host_port:match("^([^:]+):(%d+)$")
+
+	if not host or not port then
+		--error("Invalid URL: " .. url)
+		return nil
+	end
+
+	return {
+		protocol = protocol,
+		username = username,
+		password = password,
+		host = host,
+		port = tonumber(port)
+	}
 end
 
 local default_file_tree = {
@@ -666,6 +758,9 @@ function to_check(arch, app_name)
 	end
 
 	local remote_version = json.tag_name
+	if com[app_name].remote_version_str_replace then
+		remote_version = remote_version:gsub(com[app_name].remote_version_str_replace, "")
+	end
 	local has_update = compare_versions(local_version:match("[^v]+"), "<", remote_version:match("[^v]+"))
 
 	if not has_update then
@@ -749,12 +844,23 @@ function to_extract(app_name, file, subfix)
 		return {code = 1, error = i18n.translate("File path required.")}
 	end
 
-	if sys.exec("echo -n $(opkg list-installed | grep -c unzip)") ~= "1" then
-		exec("/bin/rm", {"-f", file})
-		return {
-			code = 1,
-			error = i18n.translate("Not installed unzip, Can't unzip!")
-		}
+	local tools_name
+	if com[app_name].zipped then
+		if not com[app_name].zipped_suffix or com[app_name].zipped_suffix == "zip" then
+			tools_name = "unzip"
+		end
+		if com[app_name].zipped_suffix and com[app_name].zipped_suffix == "tar.gz" then
+			tools_name = "tar"
+		end
+		if tools_name then
+			if sys.exec("echo -n $(command -v %s)" % { tools_name }) == "" then
+				exec("/bin/rm", {"-f", file})
+				return {
+					code = 1,
+					error = i18n.translate("Not installed %s, Can't unzip!" % { tools_name })
+				}
+			end
+		end
 	end
 
 	sys.call("/bin/rm -rf /tmp/".. app_name .."_extract.*")
@@ -768,8 +874,19 @@ function to_extract(app_name, file, subfix)
 	local tmp_dir = util.trim(util.exec("mktemp -d -t ".. app_name .."_extract.XXXXXX"))
 
 	local output = {}
-	exec("/usr/bin/unzip", {"-o", file, app_name, "-d", tmp_dir},
-			 function(chunk) output[#output + 1] = chunk end)
+
+	if tools_name then
+		if tools_name == "unzip" then
+			local bin = sys.exec("echo -n $(command -v unzip)")
+			exec(bin, {"-o", file, app_name, "-d", tmp_dir}, function(chunk) output[#output + 1] = chunk end)
+		elseif tools_name == "tar" then
+			local bin = sys.exec("echo -n $(command -v tar)")
+			if com[app_name].zipped_suffix == "tar.gz" then
+				exec(bin, {"-zxf", file, "-C", tmp_dir}, function(chunk) output[#output + 1] = chunk end)
+				sys.call("/bin/mv -f " .. tmp_dir .. "/*/" .. com[app_name].name:lower() .. " " .. tmp_dir)
+			end
+		end
+	end
 
 	local files = util.split(table.concat(output))
 
@@ -788,7 +905,7 @@ function to_move(app_name,file)
 	local bin_path = file
 	local cmd_rm_tmp = "/bin/rm -rf /tmp/" .. app_name .. "_download.*"
 	if fs.stat(file, "type") == "dir" then
-		bin_path = file .. "/" .. app_name
+		bin_path = file .. "/" .. com[app_name].name:lower()
 		cmd_rm_tmp = "/bin/rm -rf /tmp/" .. app_name .. "_extract.*"
 	end
 
@@ -844,11 +961,11 @@ function to_move(app_name,file)
 end
 
 function get_version()
-	return sys.exec("echo -n $(opkg info luci-app-passwall |grep 'Version'|awk '{print $2}')")
+	return sys.exec("echo -n $(opkg list-installed luci-app-passwall |awk '{print $3}')")
 end
 
 function to_check_self()
-	local url = "https://raw.githubusercontent.com/xiaorouji/openwrt-passwall/luci/luci-app-passwall/Makefile"
+	local url = "https://raw.githubusercontent.com/xiaorouji/openwrt-passwall/main/luci-app-passwall/Makefile"
 	local tmp_file = "/tmp/passwall_makefile"
 	local return_code, result = curl_logic(url, tmp_file, curl_args)
 	result = return_code == 0
@@ -861,7 +978,6 @@ function to_check_self()
 	end
 	local local_version  = get_version()
 	local remote_version = sys.exec("echo -n $(grep 'PKG_VERSION' /tmp/passwall_makefile|awk -F '=' '{print $2}')")
-				.. "-" ..  sys.exec("echo -n $(grep 'PKG_RELEASE' /tmp/passwall_makefile|awk -F '=' '{print $2}')")
 
 	local has_update = compare_versions(local_version, "<", remote_version)
 	if not has_update then
@@ -878,4 +994,78 @@ function to_check_self()
 		remote_version = remote_version,
 		error = i18n.translatef("The latest version: %s, currently does not support automatic update, if you need to update, please compile or download the ipk and then manually install.", remote_version)
 	}
+end
+
+function is_js_luci()
+	return sys.call('[ -f "/www/luci-static/resources/uci.js" ]') == 0
+end
+
+function set_apply_on_parse(map)
+	if is_js_luci() == true then
+		map.apply_on_parse = false
+		map.on_after_apply = function(self)
+			if self.redirect then
+				os.execute("sleep 1")
+				luci.http.redirect(self.redirect)
+			end
+		end
+	end
+end
+
+function luci_types(id, m, s, type_name, option_prefix)
+	local rewrite_option_table = {}
+	for key, value in pairs(s.fields) do
+		if key:find(option_prefix) == 1 then
+			if not s.fields[key].not_rewrite then
+				if s.fields[key].rewrite_option then
+					if not rewrite_option_table[s.fields[key].rewrite_option] then
+						rewrite_option_table[s.fields[key].rewrite_option] = 1
+					else
+						rewrite_option_table[s.fields[key].rewrite_option] = rewrite_option_table[s.fields[key].rewrite_option] + 1
+					end
+				end
+
+				s.fields[key].cfgvalue = function(self, section)
+					if self.rewrite_option then
+						return m:get(section, self.rewrite_option)
+					else
+						if self.option:find(option_prefix) == 1 then
+							return m:get(section, self.option:sub(1 + #option_prefix))
+						end
+					end
+				end
+				s.fields[key].write = function(self, section, value)
+					if s.fields["type"]:formvalue(id) == type_name then
+						if self.rewrite_option then
+							m:set(section, self.rewrite_option, value)
+						else
+							if self.option:find(option_prefix) == 1 then
+								m:set(section, self.option:sub(1 + #option_prefix), value)
+							end
+						end
+					end
+				end
+				s.fields[key].remove = function(self, section)
+					if s.fields["type"]:formvalue(id) == type_name then
+						if self.rewrite_option and rewrite_option_table[self.rewrite_option] == 1 then
+							m:del(section, self.rewrite_option)
+						else
+							if self.option:find(option_prefix) == 1 then
+								m:del(section, self.option:sub(1 + #option_prefix))
+							end
+						end
+					end
+				end
+			end
+
+			local deps = s.fields[key].deps
+			if #deps > 0 then
+				for index, value in ipairs(deps) do
+					deps[index]["type"] = type_name
+				end
+			else
+				s.fields[key]:depends({ type = type_name })
+			end
+		end
+	end
 end

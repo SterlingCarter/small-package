@@ -5,23 +5,20 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=naiveproxy
-PKG_VERSION:=111.0.5563.64-1
+PKG_VERSION:=121.0.6167.71-1
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/klzgrad/naiveproxy/tar.gz/v$(PKG_VERSION)?
-PKG_HASH:=a5411d28943be60a273c58059e3ee81cb8e4623d8286f8e57bf5a34e4fa7e7ac
+PKG_HASH:=8e6d3029a0249140595fab3d668103881689f6c7ef7c65230191f674a370b309
 
 PKG_LICENSE:=BSD 3-Clause
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
 
 PKG_BUILD_DEPENDS:=gn/host
-ifneq ($(wildcard $(TOPDIR)/feeds/packages/devel/ninja/ninja.mk),)
-PKG_BUILD_DEPENDS+= ninja/host
-endif
 PKG_BUILD_PARALLEL:=1
-PKG_USE_MIPS16:=0
+PKG_BUILD_FLAGS:=no-mips16
 
 ifneq ($(CONFIG_CPU_TYPE)," ")
   CPU_TYPE:=$(word 1, $(subst +," ,$(CONFIG_CPU_TYPE)))
@@ -58,22 +55,22 @@ ifneq ($(CONFIG_CCACHE),)
   export naive_ccache_flags=cc_wrapper="$(CCACHE)"
 endif
 
-CLANG_VER:=16-init-17653-g39da55e8-2
+CLANG_VER:=18-init-12938-geb1d5065-1
 CLANG_FILE:=clang-llvmorg-$(CLANG_VER).tgz
 define Download/CLANG
 	URL:=https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64
 	URL_FILE:=$(CLANG_FILE)
 	FILE:=$(CLANG_FILE)
-	HASH:=b4afdf625aa4b72c5d188ed28a13dd352a881a2a4149542f0c903698d0498017
+	HASH:=fd1628fdb22157a7328c25802a745f17f92f5210a8b62591202deb92413f52e5
 endef
 
-PGO_VER:=5563-1677886924-aa8d450a18b4f7f1cd41619f60bc5da6beb3c1d0
+PGO_VER:=6167-1705427108-cb39f8a22759d3159f79efc273ac8b13a0f3882a
 PGO_FILE:=chrome-linux-$(PGO_VER).profdata
 define Download/PGO_PROF
 	URL:=https://storage.googleapis.com/chromium-optimization-profiles/pgo_profiles
 	URL_FILE:=$(PGO_FILE)
 	FILE:=$(PGO_FILE)
-	HASH:=eb16e7be414614c215ba90538f70f431cf444b9985865ad20d8743b707a235a6
+	HASH:=7632c875db539cb1d4a0df6eb3acc9e155d2d477376dec1f815081bbae7cdd4f
 endef
 
 define Build/Prepare
@@ -102,16 +99,22 @@ define Build/Configure
 endef
 
 define Build/Compile
-	ninja -C "$(PKG_BUILD_DIR)/src/out/Release" naive
+	+$(NINJA) -C "$(PKG_BUILD_DIR)/src/out/Release" naive
+endef
+
+define Package/naiveproxy/conffiles
+/etc/config/naiveproxy
 endef
 
 define Package/naiveproxy/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/out/Release/naive $(1)/usr/bin/naive
+	$(INSTALL_DIR) $(1)/etc/config $(1)/etc/init.d
+	$(INSTALL_CONF) $(CURDIR)/files/naiveproxy.config $(1)/etc/config/naiveproxy
+	$(INSTALL_BIN) $(CURDIR)/files/naiveproxy.init $(1)/etc/init.d/naiveproxy
 endef
 
 $(eval $(call Download,CLANG))
 $(eval $(call Download,PGO_PROF))
 
 $(eval $(call BuildPackage,naiveproxy))
-

@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ddns-scripts
 PKG_VERSION:=2.8.2
-PKG_RELEASE:=25
+PKG_RELEASE:=42
 
 PKG_LICENSE:=GPL-2.0
 
@@ -57,6 +57,26 @@ define Package/ddns-scripts-services/description
   Dynamic DNS Client definitions for supported services
 endef
 
+define Package/ddns-scripts-utils
+  $(call Package/ddns-scripts/Default)
+  TITLE:=Utility scripts for ddns configs
+  DEPENDS:=ddns-scripts
+endef
+
+define Package/ddns-scripts-utils/description
+  Dynamic DNS Client utility scripts for config files
+endef
+
+
+define Package/ddns-scripts-luadns
+  $(call Package/ddns-scripts/Default)
+  TITLE:=Extension for LuaDNS API v1
+  DEPENDS:=ddns-scripts +curl
+endef
+
+define Package/ddns-scripts-luadns/description
+  Dynamic DNS Client scripts extension for LuaDNS API v1 (require curl)
+endef
 
 define Package/ddns-scripts-cloudflare
   $(call Package/ddns-scripts/Default)
@@ -67,6 +87,17 @@ endef
 
 define Package/ddns-scripts-cloudflare/description
   Dynamic DNS Client scripts extension for cloudflare.com API v4 (require curl)
+endef
+
+
+define Package/ddns-scripts-gcp
+  $(call Package/ddns-scripts/Default)
+  TITLE:=Extension for Google Cloud DNS API v1
+  DEPENDS:=ddns-scripts +curl +openssl-util
+endef
+
+define Package/ddns-scripts-gcp/description
+  Dynamic DNS Client scripts extension for Google Cloud DNS API v1 (requires curl)
 endef
 
 
@@ -322,7 +353,9 @@ define Package/ddns-scripts-services/install
 		$(1)/usr/share/ddns/default
 
 	# Remove special services
+	rm $(1)/usr/share/ddns/default/luadns.com-v1.json
 	rm $(1)/usr/share/ddns/default/cloudflare.com-v4.json
+	rm $(1)/usr/share/ddns/default/cloud.google.com-v1.json
 	rm $(1)/usr/share/ddns/default/freedns.42.pl.json
 	rm $(1)/usr/share/ddns/default/godaddy.com-v1.json
 	rm $(1)/usr/share/ddns/default/digitalocean.com-v2.json
@@ -339,6 +372,34 @@ define Package/ddns-scripts-services/install
 endef
 
 
+define Package/ddns-scripts-utils/install
+	$(INSTALL_DIR) $(1)/usr/lib/ddns
+	$(INSTALL_BIN) ./samples/slaac_sample.sh \
+		$(1)/usr/lib/ddns/slaac.sh
+	$(INSTALL_BIN) ./samples/getlocalip_sample.sh \
+		$(1)/usr/lib/ddns/getlocalip.sh
+endef
+
+
+define Package/ddns-scripts-luadns/install
+	$(INSTALL_DIR) $(1)/usr/lib/ddns
+	$(INSTALL_BIN) ./files/usr/lib/ddns/update_luadns_v1.sh \
+		$(1)/usr/lib/ddns
+
+	$(INSTALL_DIR) $(1)/usr/share/ddns/default
+	$(INSTALL_DATA) ./files/usr/share/ddns/default/luadns.com-v1.json \
+		$(1)/usr/share/ddns/default/
+endef
+
+define Package/ddns-scripts-luadns/prerm
+#!/bin/sh
+if [ -z "$${IPKG_INSTROOT}" ]; then
+	/etc/init.d/ddns stop
+fi
+exit 0
+endef
+
+
 define Package/ddns-scripts-cloudflare/install
 	$(INSTALL_DIR) $(1)/usr/lib/ddns
 	$(INSTALL_BIN) ./files/usr/lib/ddns/update_cloudflare_com_v4.sh \
@@ -350,6 +411,25 @@ define Package/ddns-scripts-cloudflare/install
 endef
 
 define Package/ddns-scripts-cloudflare/prerm
+#!/bin/sh
+if [ -z "$${IPKG_INSTROOT}" ]; then
+	/etc/init.d/ddns stop
+fi
+exit 0
+endef
+
+
+define Package/ddns-scripts-gcp/install
+	$(INSTALL_DIR) $(1)/usr/lib/ddns
+	$(INSTALL_BIN) ./files/usr/lib/ddns/update_gcp_v1.sh \
+		$(1)/usr/lib/ddns
+
+	$(INSTALL_DIR) $(1)/usr/share/ddns/default
+	$(INSTALL_DATA) ./files/usr/share/ddns/default/cloud.google.com-v1.json \
+		$(1)/usr/share/ddns/default/
+endef
+
+define Package/ddns-scripts-gcp/prerm
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
 	/etc/init.d/ddns stop
@@ -607,7 +687,10 @@ endef
 
 $(eval $(call BuildPackage,ddns-scripts))
 $(eval $(call BuildPackage,ddns-scripts-services))
+$(eval $(call BuildPackage,ddns-scripts-utils))
+$(eval $(call BuildPackage,ddns-scripts-luadns))
 $(eval $(call BuildPackage,ddns-scripts-cloudflare))
+$(eval $(call BuildPackage,ddns-scripts-gcp))
 $(eval $(call BuildPackage,ddns-scripts-freedns))
 $(eval $(call BuildPackage,ddns-scripts-godaddy))
 $(eval $(call BuildPackage,ddns-scripts-digitalocean))

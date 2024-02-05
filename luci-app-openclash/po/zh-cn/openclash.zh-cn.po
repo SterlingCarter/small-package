@@ -302,6 +302,9 @@ msgstr "规则设置"
 msgid "Config Manage"
 msgstr "配置管理"
 
+msgid "Upload Config File"
+msgstr "上传配置文件"
+
 msgid "Upload File Type"
 msgstr "上传文件类型"
 
@@ -575,11 +578,14 @@ msgstr "指定流量(策略)的代理方式，只支持选择（策略组），�
 msgid "Custom Clash Rules"
 msgstr "*自定义规则"
 
-msgid "Custom Priority Rules Here, For More Go:"
-msgstr "设置自定义规则（优先匹配），详细信息请参阅:"
+msgid "Custom Rules Here, For More Go:"
+msgstr "在上方设置自定义规则，详细信息请参阅:"
 
-msgid "Custom Extended Rules Here, For More Go:"
-msgstr "设置自定义规则（候补匹配），详细信息请参阅:"
+msgid "(Priority)"
+msgstr "（优先匹配）"
+
+msgid "(Extended)"
+msgstr "（候补匹配）"
 
 msgid "IP To CIDR:"
 msgstr "在线 IP 段转 CIDR 地址:"
@@ -663,8 +669,8 @@ msgstr "保留配置"
 msgid "Only Update Servers Below When Subscription"
 msgstr "订阅时仅更新节点和代理集，保留下方策略组设置，不修改顺序"
 
-msgid "New Servers Group"
-msgstr "新节点默认策略组"
+msgid "New Servers Group (Support Regex)"
+msgstr "新节点默认策略组（请勿重复添加，支持正则匹配）"
 
 msgid "Set The New Subscribe Server's Default Proxy Groups"
 msgstr "选择符合订阅要求的新节点的默认策略组（请勿重复添加）"
@@ -783,8 +789,14 @@ msgstr "别名（请勿重名）"
 msgid "Rule Behavior"
 msgstr "规则类型"
 
+msgid "Rule Format"
+msgstr "规则格式"
+
 msgid "Choose The Rule Behavior"
 msgstr "选择规则类型"
+
+msgid "Choose The Rule File Format, For More Info:"
+msgstr "选择规则格式, 了解使用方式请前往："
 
 msgid "Rule Providers Path"
 msgstr "规则集路径"
@@ -837,8 +849,8 @@ msgstr "Load-Balance【负载均衡】"
 msgid "Relay-Traffic"
 msgstr "Relay【嵌套中转】"
 
-msgid "Other Group"
-msgstr "包含其他策略组（请勿重复添加）"
+msgid "Other Group (Support Regex)"
+msgstr "包含其他策略组（请勿重复添加，支持正则匹配）"
 
 msgid "The Added Proxy Groups Must Exist Except 'DIRECT' & 'REJECT'"
 msgstr "注意：除'DIRECT'和'REJECT'外，修改配置文件前添加的其他策略组必须已创建"
@@ -846,8 +858,8 @@ msgstr "注意：除'DIRECT'和'REJECT'外，修改配置文件前添加的其�
 msgid "The Added Proxy Provider Must Exist"
 msgstr "修改配置文件前添加的代理集必须已创建"
 
-msgid "Proxy Group"
-msgstr "添加到策略组（请勿重复添加）"
+msgid "Proxy Group (Support Regex)"
+msgstr "添加到策略组（请勿重复添加，支持正则匹配）"
 
 msgid "Set Proxy Group"
 msgstr "指定策略组"
@@ -984,7 +996,7 @@ msgstr "已下载"
 msgid "Not Exist"
 msgstr "未下载"
 
-msgid "Order Number"
+msgid "Serial Number"
 msgstr "序号"
 
 msgid "Game Rules Manage"
@@ -1158,6 +1170,9 @@ msgstr "Yacd 控制面板"
 msgid "Dashboard Control Panel"
 msgstr "Dashboard 控制面板"
 
+msgid "Metacubexd Control Panel"
+msgstr "Metacubexd 控制面板"
+
 msgid "Control Panel Login IP"
 msgstr "控制面板登录 IP"
 
@@ -1217,9 +1232,6 @@ msgstr "兼容"
 
 msgid "Mix"
 msgstr "混合"
-
-msgid "Open Panel"
-msgstr "打开控制面板"
 
 msgid "Close All Connections"
 msgstr "重置所有链接"
@@ -1323,11 +1335,11 @@ msgstr "注意：如更新失败可手动下载并上传"
 msgid "Note: the client may not support update, because the firmware with squashfs format will not release flash space after updating"
 msgstr "注意：客户端可能无法更新，因为squashfs格式的固件更新后不会释放闪存空间"
 
-msgid "Compiled Version Selected"
-msgstr "已选择编译版本"
+msgid "Compiled Version Selected (Auto-save when you click to update or download)"
+msgstr "已选择编译版本（点击更新或下载时自动保存）"
 
-msgid "Release Branch Selected"
-msgstr "已选择更新分支"
+msgid "Release Branch Selected (Auto-save when you click to update or download)"
+msgstr "已选择更新分支（点击更新或下载时自动保存）"
 
 msgid "CPU Architecture"
 msgstr "处理器架构"
@@ -1605,8 +1617,8 @@ msgstr "OpenClash 更新失败，文件保存在 /tmp/openclash.ipk，请尝试�
 msgid "Download Failed, Please Check The Network or Try Again Later!"
 msgstr "下载失败，请检查网络或稍后再试！"
 
-msgid "Failed to Get Version Information, Please Try Again Later..."
-msgstr "获取版本信息失败，请稍后再试..."
+msgid "Error: Failed to Get Version Information, Please Try Again Later..."
+msgstr "错误：获取版本信息失败，请稍后再试..."
 
 msgid "OpenClash Has not Been Updated, Stop Continuing!"
 msgstr "OpenClash 没有更新，停止继续操作！"
@@ -1638,7 +1650,7 @@ msgstr "版本内核没有更新，停止继续操作！"
 msgid "Start Downloading Third Party Rules in Use..."
 msgstr "开始下载使用中的第三方规则..."
 
-msgid "Warrning: Multiple Other-Rules-Configurations Enabled, Ignore..."
+msgid "Warning: Multiple Other-Rules-Configurations Enabled, Ignore..."
 msgstr "警告：检测到启用了多个第三方规则配置，忽略后续配置..."
 
 msgid "Download Successful, Start Preprocessing Rule File..."
@@ -1695,8 +1707,8 @@ msgstr "替换成功，检测到已启用节点筛选，开始挑选节点..."
 msgid "is Replaced Successfully, Start to Reserving..."
 msgstr "替换成功，检测到已启用保留配置，开始进行设置..."
 
-msgid "Config File Download Successful, Check If There is Any Update..."
-msgstr "配置文件下载成功，检查是否有更新..."
+msgid "Config File Test Successful, Check If There is Any Update..."
+msgstr "配置文件测试成功，检查是否有更新..."
 
 msgid "Are Updates, Start Replacing..."
 msgstr "有更新，开始替换..."
@@ -2622,6 +2634,9 @@ msgstr "提示：开始自动选择（检测）Bilibili 解锁节点..."
 msgid "Tip: Start Auto Select Proxy For Google Not CN Unlock..."
 msgstr "提示：开始自动选择（检测）Google 非送中节点..."
 
+msgid "Tip: Start Auto Select Proxy For OpenAI Unlock..."
+msgstr "提示：开始自动选择（检测）OpenAI 解锁节点..."
+
 msgid "Netflix Group:"
 msgstr "Netflix 策略组："
 
@@ -2660,6 +2675,9 @@ msgstr "Bilibili 策略组："
 
 msgid "Google Group:"
 msgstr "Google 策略组："
+
+msgid "OpenAI Group:"
+msgstr "OpenAI 策略组："
 
 msgid "full support"
 msgstr "完整解锁"
@@ -2961,6 +2979,9 @@ msgstr "注意: 游戏代理请使用 Vmess 以外的节点"
 msgid "Note: If the connection is abnormal, please follow the steps on this page to check first"
 msgstr "注意: 连接异常时请按照此页步骤先进行检查"
 
+msgid "Note: If you need to perform client access control in Fake-ip mode, please change the DNS hijacking mode to firewall forwarding"
+msgstr "注意: Fake-ip 模式下如需要进行客户端访问控制，请将DNS劫持模式改为防火墙转发"
+
 msgid "Click to the page"
 msgstr "点击前往"
 
@@ -3021,8 +3042,8 @@ msgstr "指定接口"
 msgid "DNS Lookup Only Through The Specific Interface"
 msgstr "DNS 仅通过特定接口进行查询"
 
-msgid "Specific Group"
-msgstr "指定策略组"
+msgid "Specific Group (Support Regex)"
+msgstr "指定策略组（支持正则匹配）"
 
 msgid "Group Use For Proxy The DNS"
 msgstr "用于代理此 DNS 的策略组"
@@ -3090,8 +3111,17 @@ msgstr "切换（更新） Dashboard 版本"
 msgid "Switch(Update) Yacd Version"
 msgstr "切换（更新） Yacd 版本"
 
+msgid "Update Metacubexd Version"
+msgstr "更新 Metacubexd 版本"
+
 msgid "Downloading File..."
 msgstr "文件下载中..."
+
+msgid "Update Failed"
+msgstr "更新失败"
+
+msgid "Update Successful"
+msgstr "更新成功"
 
 msgid "Switch Failed"
 msgstr "切换失败"
@@ -3350,3 +3380,84 @@ msgstr "已删除指定的订阅信息来源地址！"
 
 msgid "Specify subscribe infos sources url failed:"
 msgstr "指定新的订阅信息来源地址失败："
+
+msgid "IPv6 Proxy Mode"
+msgstr "IPv6 代理模式"
+
+msgid "TProxy Mode"
+msgstr "TProxy 模式"
+
+msgid "Redirect Mode"
+msgstr "Redirect 模式"
+
+msgid "TUN Mode"
+msgstr "TUN 模式"
+
+msgid "TUN Mode"
+msgstr "TUN 模式"
+
+msgid "Tip: IPv6 Proxy Mode is Redirect..."
+msgstr "提示：IPv6 代理模式为 Redirect..."
+
+msgid "Tip: IPv6 Proxy Mode is TUN..."
+msgstr "提示：IPv6 代理模式为 TUN..."
+
+msgid "Tip: IPv6 Proxy Mode is TProxy..."
+msgstr "提示：IPv6 代理模式为 TProxy..."
+
+msgid "Warning: Only Meta Core Support IPv6 Tun Mode, Use TProxy Instead..."
+msgstr "提示：只有 Meta 内核支持 IPv6 Tun 模式，使用 TProxy 模式代替..."
+
+msgid "Warning: Can't Settting Only Intranet Allowed Function, Get IPv4 WAN Interfaces error, Please Verify The Firewall's WAN Zone Name is wan, Ignore This IF The Device Does not Have a WAN Interfaces..."
+msgstr "警告：设置仅允许内网功能失败，无法获取 IPv4 的 WAN 接口名称，请确保防火墙设置中 IPv4 WAN 区域的名称为 wan，如设备无 WAN 口请忽略此提示..."
+
+msgid "Warning: Can't Settting Only Intranet Allowed Function, Get IPv6 WAN Interfaces error, Please Verify The Firewall's WAN Zone Name is wan, Ignore This IF The Device Does not Have a WAN Interfaces..."
+msgstr "警告：设置仅允许内网功能失败，无法获取 IPv6 的 WAN 接口名称，请确保防火墙设置中 IPv6 WAN 区域的名称为 wan，如设备无 WAN 口请忽略此提示..."
+
+msgid "Config File Download Successful, Test If There is Any Errors..."
+msgstr "配置文件下载成功，使用内核测试是否有错误..."
+
+msgid "configuration file"
+msgstr "配置文件"
+
+msgid "test failed"
+msgstr "测试失败..."
+
+msgid "test is successful"
+msgstr "测试成功..."
+
+msgid "Error: Config File Tested Faild, Please Check The Log Infos!"
+msgstr "错误：配置文件测试失败，请查看《内核日志》排查失败原因！"
+
+msgid "Test The Config File First..."
+msgstr "启动前调用内核测试配置文件..."
+
+msgid "Other Parameters"
+msgstr "其他附加配置"
+
+msgid "Edit Your Other Parameters Here"
+msgstr "请在此编辑您的附加配置"
+
+msgid "Error: Config Not Found, Switch Config File to"
+msgstr "错误：未找到配置文件，切换至配置文件"
+
+msgid "Warning: Skip the nameserver-policy that Core not Support"
+msgstr "警告：跳过核心不支持的 nameserver-policy 规则"
+
+msgid "Enable Unified Delay"
+msgstr "*启用统一延迟"
+
+msgid "Change The Delay Calculation Method To Remove Extra Delays Such as Handshaking"
+msgstr "更换延迟计算方式，通过去除握手等额外开销来降低延迟数值"
+
+msgid "Tip: If the download fails, try setting the CDN in Overwrite Settings - General Settings - Github Address Modify Options"
+msgstr "提示：如果下载失败，您可以尝试在覆写设置 - 常规设置 - Github地址修改选项中设置CDN"
+
+msgid "Change The TCP Keep-alive Interval, Selecting a Larger Value Avoids Abnormal Resource Consumption"
+msgstr "更改 TCP Keep-alive 间隔，选择较大数值可以避免异常的资源消耗"
+
+msgid "TCP Keep-alive Interval(s)"
+msgstr "TCP Keep-alive 间隔（s）"
+
+msgid "Used for Downloading Subscriptions, Defaults to Clash"
+msgstr "用于下载订阅时指定 UA，默认为 Clash"

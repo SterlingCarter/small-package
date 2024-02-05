@@ -9,10 +9,10 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=natflow
-PKG_VERSION:=20230325
+PKG_VERSION:=20240125
 
 PKG_SOURCE_URL:=https://codeload.github.com/ptpt52/natflow/tar.gz/$(PKG_VERSION)?
-PKG_HASH:=78ef4af754a83770b7eec1f49a612c19138560615854a24c7595c59225d9836b
+PKG_HASH:=bc48c62bff42821ab3273f60e8b752a2f30500cb0dc834011d9a28bc869f9b13
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 
 PKG_MAINTAINER:=Chen Minqiang <ptpt52@gmail.com>
@@ -26,8 +26,7 @@ define KernelPackage/natflow
   TITLE:=natflow kernel driver
   KCONFIG:= \
 	    CONFIG_NF_CONNTRACK_MARK=y \
-	    CONFIG_NETFILTER_INGRESS=y \
-	    CONFIG_NF_FLOW_TABLE
+	    CONFIG_NETFILTER_INGRESS=y
   FILES:=$(PKG_BUILD_DIR)/natflow.ko
   AUTOLOAD:=$(call AutoLoad,96,natflow)
   DEPENDS:= +kmod-ipt-conntrack +kmod-ipt-nat +kmod-ipt-ipset +kmod-br-netfilter +LINUX_5_4:kmod-nf-flow

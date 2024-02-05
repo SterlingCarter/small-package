@@ -5,21 +5,18 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gn
-PKG_RELEASE:=3
+PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://gn.googlesource.com/gn.git
-PKG_SOURCE_DATE:=2023-02-17
-PKG_SOURCE_VERSION:=b25a2f8c2d33f02082f0f258350f5e22c0973108
-PKG_MIRROR_HASH:=skip
+PKG_SOURCE_DATE:=2023-11-17
+PKG_SOURCE_VERSION:=7367b0df0a0aa25440303998d54045bda73935a5
+PKG_MIRROR_HASH:=c11eb62d257f9e41d29139d66e94d3798b013a650dd493ae8759c57e2e64cfd1
 
 PKG_LICENSE:=BSD 3-Clause
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
 
-ifneq ($(wildcard $(TOPDIR)/feeds/packages/devel/ninja/ninja.mk),)
-PKG_BUILD_DEPENDS+= ninja/host
-endif
 PKG_HOST_ONLY:=1
 HOST_BUILD_PARALLEL:=1
 
@@ -45,7 +42,7 @@ define Host/Configure
 endef
 
 define Host/Compile
-	ninja -C $(HOST_BUILD_DIR)/out
+	+$(NINJA) -C $(HOST_BUILD_DIR)/out
 endef
 
 define Host/Install

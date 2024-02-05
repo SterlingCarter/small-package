@@ -233,7 +233,7 @@ local function corecv()
 	if not nixio.fs.access(dev_core_path) then
 		return "0"
 	else
-		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $2}'",dev_core_path))
+		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $2}'", dev_core_path))
 	end
 end
 
@@ -241,7 +241,7 @@ local function coretuncv()
 	if not nixio.fs.access(tun_core_path) then
 		return "0"
 	else
-		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $2}'",tun_core_path))
+		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $2}'", tun_core_path))
 	end
 end
 
@@ -249,7 +249,7 @@ local function coremetacv()
 	if not nixio.fs.access(meta_core_path) then
 		return "0"
 	else
-		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $3}'",meta_core_path))
+		return luci.sys.exec(string.format("%s -v 2>/dev/null |awk -F ' ' '{print $3}' |head -1", meta_core_path))
 	end
 end
 
@@ -383,7 +383,7 @@ function action_remove_all_core()
 end
 
 function action_one_key_update()
-  return luci.sys.call("bash /usr/share/openclash/openclash_update.sh 'one_key_update' >/dev/null 2>&1 &")
+  return luci.sys.call("rm -rf /tmp/*_last_version 2>/dev/null && bash /usr/share/openclash/openclash_update.sh 'one_key_update' >/dev/null 2>&1 &")
 end
 
 local function dler_login_info_save()
@@ -994,7 +994,7 @@ function action_switch_dashboard()
 			uci:set("openclash", "config", "dashboard_type", "Meta")
 			uci:commit("openclash")
 		end
-	elseif tonumber(state) == 1 then
+	elseif switch_name == "Yacd" and tonumber(state) == 1 then
 		if switch_type == "Official" then
 			uci:set("openclash", "config", "yacd_type", "Official")
 			uci:commit("openclash")
@@ -1386,6 +1386,7 @@ function action_backup()
 
 	luci.http.prepare_content("application/x-targz")
 	luci.ltn12.pump.all(reader, luci.http.write)
+	luci.sys.call("rm -rf /etc/openclash/openclash >/dev/null 2>&1")
 end
 
 function action_backup_ex_core()
@@ -1399,10 +1400,10 @@ function action_backup_ex_core()
 
 	luci.http.prepare_content("application/x-targz")
 	luci.ltn12.pump.all(reader, luci.http.write)
+	luci.sys.call("rm -rf /etc/openclash/openclash >/dev/null 2>&1")
 end
 
 function action_backup_only_config()
-	local config = luci.sys.call("cp /etc/config/openclash /etc/openclash/openclash >/dev/null 2>&1")
 	local reader = ltn12_popen("tar -C '/etc/openclash' -cz './config' 2>/dev/null")
 
 	luci.http.header(
@@ -1415,7 +1416,6 @@ function action_backup_only_config()
 end
 
 function action_backup_only_core()
-	local config = luci.sys.call("cp /etc/config/openclash /etc/openclash/openclash >/dev/null 2>&1")
 	local reader = ltn12_popen("tar -C '/etc/openclash' -cz './core' 2>/dev/null")
 
 	luci.http.header(
@@ -1428,7 +1428,6 @@ function action_backup_only_core()
 end
 
 function action_backup_only_rule()
-	local config = luci.sys.call("cp /etc/config/openclash /etc/openclash/openclash >/dev/null 2>&1")
 	local reader = ltn12_popen("tar -C '/etc/openclash' -cz './rule_provider' 2>/dev/null")
 
 	luci.http.header(
@@ -1441,7 +1440,6 @@ function action_backup_only_rule()
 end
 
 function action_backup_only_proxy()
-	local config = luci.sys.call("cp /etc/config/openclash /etc/openclash/openclash >/dev/null 2>&1")
 	local reader = ltn12_popen("tar -C '/etc/openclash' -cz './proxy_provider' 2>/dev/null")
 
 	luci.http.header(

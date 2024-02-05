@@ -57,20 +57,19 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 		padding: 0 1px;
 		border-right: 1px solid #dddddd;
 		cursor: pointer;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	#tab-header-<%=self.config%>-<%=self.sectiontype%> ul li a{
 		float: unset !important;
 		padding: unset !important;
 		vertical-align: middle;
-		white-space: nowrap;
-		overflow: hidden;
-        text-overflow: ellipsis;
 	}
 
 	#tab-header-<%=self.config%>-<%=self.sectiontype%> ul li.cbi-tab > a{
 		font-weight: bolder;
-		color: unset;
 	}
 	 
 	#tab-header-<%=self.config%>-<%=self.sectiontype%> ul li a:hover{
@@ -123,6 +122,9 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 						<%- end -%>
 					<%- end -%>
 					<%- for i, k in pairs(self.children) do if not k.optional then -%>
+						<%- if i == 1 then -%>
+							<th class="cbi-section-table-cell"><%:Serial Number%></th>
+						<%- end -%>
 						<th class="cbi-section-table-cell"<%=width(k)%>>
 						<%- if k.titleref then -%><a title="<%=self.titledesc or translate('Go to relevant configuration page')%>" class="cbi-title-ref" href="<%=k.titleref%>"><%- end -%>
 							<%-=k.title-%>
@@ -151,6 +153,7 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 					<%- end -%>
 					</tr>
 					<%- local isempty = true
+						local num = 1
 					for i, k in ipairs(self:cfgsections()) do
 						section = k
 						while true do
@@ -164,6 +167,10 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 							<% if not self.anonymous then -%>
 								<th><h3><%=(type(self.sectiontitle) == "function") and self:sectiontitle(section) or k%></h3></th>
 							<%- end %>
+							<td class="cbi-section-table-cell">
+								<p><%=num%></p>
+								<% num = num + 1 -%>
+							</td>
 							<%-
 								for k, node in ipairs(self.children) do
 									if not node.optional then
@@ -173,15 +180,15 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 							-%>
 							<%- if self.sortable then -%>
 								<td class="cbi-section-table-cell">
-									<input class="cbi-button cbi-button-up" type="button" value=""  onclick="return cbi_row_swap(this, true, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move up%>" title="<%:Move up%>" />
-									<input class="cbi-button cbi-button-down" type="button" value=""  onclick="return cbi_row_swap(this, false, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move down%>" title="<%:Move down%>" />
+									<input class="cbi-button cbi-button-up" type="button" value="<%:∧%>"  onclick="return cbi_row_swap(this, true, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move up%>" title="<%:Move up%>" />
+									<input class="cbi-button cbi-button-down" type="button" value="<%:∨%>"  onclick="return cbi_row_swap(this, false, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move down%>" title="<%:Move down%>" />
 								</td>
 							<%- end -%>
 			
 							<%- if self.extedit or self.addremove then -%>
 								<td class="cbi-section-table-cell">
 									<%- if self.extedit then -%>
-										<input class="cbi-button cbi-button-edit" type="button" value="<%:Edit%>"
+										<input class="btn cbi-button cbi-button-edit" type="button" value="<%:Edit%>"
 										<%- if type(self.extedit) == "string" then
 										%> onclick="location.href='<%=self.extedit:format(section)%>';return switch_to_tab<%=sectiontype%>()"
 										<%- elseif type(self.extedit) == "function" then
@@ -189,7 +196,7 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 										<%- end
 										%> alt="<%:Edit%>" title="<%:Edit%>" />
 									<%- end; if self.addremove then %>
-										<input class="cbi-button cbi-button-remove" type="submit" value="<%:Delete%>"  onclick="this.form.cbi_state='del-section';return switch_to_tab<%=sectiontype%>()" name="cbi.rts.<%=self.config%>.<%=k%>" alt="<%:Delete%>" title="<%:Delete%>" />
+										<input class="btn cbi-button cbi-button-remove" type="submit" value="<%:Delete%>"  onclick="this.form.cbi_state='del-section';return switch_to_tab<%=sectiontype%>()" name="cbi.rts.<%=self.config%>.<%=k%>" alt="<%:Delete%>" title="<%:Delete%>" />
 									<%- end -%>
 								</td>
 							<%- end -%>
@@ -219,11 +226,11 @@ local sectiontype = "_"..self.config.."_"..string.match(self.sectiontype, "[%w_]
 					<% if self.template_addremove then include(self.template_addremove) else -%>
 					<div class="cbi-section-create cbi-tblsection-create">
 						<% if self.anonymous then %>
-							<input class="cbi-button cbi-button-add" type="submit" onclick="return switch_to_tab<%=sectiontype%>('create')" value="<%:Add%>" name="cbi.cts.<%=self.config%>.<%=self.sectiontype%>.<%=section%>" title="<%:Add%>" />
+							<input class="btn cbi-button cbi-button-add" type="submit" onclick="return switch_to_tab<%=sectiontype%>('create')" value="<%:Add%>" name="cbi.cts.<%=self.config%>.<%=self.sectiontype%>.<%=section%>" title="<%:Add%>" />
 						<% else %>
 							<% if self.invalid_cts then -%><div class="cbi-section-error"><% end %>
 							<input type="text" class="cbi-section-create-name" id="cbi.cts.<%=self.config%>.<%=self.sectiontype%>.<%=section%>" name="cbi.cts.<%=self.config%>.<%=self.sectiontype%>.<%=section%>" data-type="uciname" data-optional="true" />
-							<input class="cbi-button cbi-button-add" type="submit" onclick="this.form.cbi_state='add-section'; return true" value="<%:Add%>" title="<%:Add%>" />
+							<input class="btn cbi-button cbi-button-add" type="submit" onclick="this.form.cbi_state='add-section'; return true" value="<%:Add%>" title="<%:Add%>" />
 							<% if self.invalid_cts then -%>
 								<br /><%:Invalid%></div>
 							<%- end %>

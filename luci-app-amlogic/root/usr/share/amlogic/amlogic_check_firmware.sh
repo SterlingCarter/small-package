@@ -40,8 +40,8 @@ tolog() {
 this_running_log="3@OpenWrt update in progress, try again later!"
 running_script="$(cat ${RUNNING_LOG} 2>/dev/null | xargs)"
 if [[ -n "${running_script}" ]]; then
-    run_num=$(echo "${running_script}" | awk -F "@" '{print $1}')
-    run_log=$(echo "${running_script}" | awk -F "@" '{print $2}')
+    run_num="$(echo "${running_script}" | awk -F "@" '{print $1}')"
+    run_log="$(echo "${running_script}" | awk -F "@" '{print $2}')"
 fi
 if [[ -n "${run_log}" && "${run_num}" -ne "3" ]]; then
     echo -e "${run_log}" >${START_LOG} 2>/dev/null && sync && exit 1
@@ -52,7 +52,10 @@ fi
 # Find the partition where root is located
 ROOT_PTNAME="$(df / | tail -n1 | awk '{print $1}' | awk -F '/' '{print $3}')"
 if [[ -z "${ROOT_PTNAME}" ]]; then
-    tolog "Cannot find the partition corresponding to the root file system!" "1"
+    ROOT_PTNAME="$(df /overlay | tail -n1 | awk '{print $1}' | awk -F '/' '{print $3}')"
+    if [[ -z "${ROOT_PTNAME}" ]]; then
+        tolog "Cannot find the partition corresponding to the root file system!" "1"
+    fi
 fi
 
 # Find the disk where the partition is located, only supports mmcblk?p? sd?? hd?? vd?? and other formats
@@ -95,7 +98,7 @@ tolog "PLATFORM: [ ${PLATFORM} ], BOARD: [ ${BOARD} ], Use in [ ${EMMC_NAME} ]"
 sleep 2
 
 # 01. Query local version information
-tolog "01. Query version information."
+tolog "01. Query version information..."
 # 01.01 Query the current version
 current_kernel_v="$(uname -r 2>/dev/null | grep -oE '^[1-9].[0-9]{1,3}.[0-9]+')"
 tolog "01.01 current version: ${current_kernel_v}"
@@ -131,31 +134,90 @@ fi
 
 # 02. Check Updated
 check_updated() {
-    tolog "02. Start checking for the latest version..."
+    tolog "02.01 Search for tags in the first 5 pages of releases..."
 
-    # Query the latest version
-    latest_version="$(
-        curl -s \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${server_firmware_url}/releases |
-            jq '.[]' |
-            jq -s --arg RTK "${releases_tag_keywords}" '.[] | select(.tag_name | contains($RTK))' |
-            jq -s '.[] | {data:.published_at, url:.assets[].browser_download_url }' |
-            jq -s --arg BOARD "_${BOARD}_" --arg MLV "${main_line_version}." '.[] | select((.url | contains($BOARD)) and (.url | contains($MLV)))' |
-            jq -s 'sort_by(.data)|reverse[]' |
-            jq -s '.[0]' -c
+    # Get the tags list
+    firmware_tags_array=()
+    for i in {1..5}; do
+        while IFS= read -r firmware_tags_name; do
+            firmware_tags_name="$(echo "${firmware_tags_name}" | sed 's/releases\/tag\///g')"
+            if [[ -n "${firmware_tags_name}" ]]; then
+                firmware_tags_array+=("${firmware_tags_name}")
+            fi
+        done < <(
+            curl -fsSL -m 10 \
+                https://github.com/${server_firmware_url}/releases?page=${i} |
+                grep -oE 'releases/tag/([^" ]+)'
+        )
+    done
+
+    if [[ "${#firmware_tags_array[*]}" -eq "0" ]]; then
+        tolog "02.01.01 Unable to retrieve a list of firmware tags." "1"
+    fi
+
+    tolog "02.02 Search for tags containing the keyword..."
+
+    # Search for tags containing the keyword
+    for i in "${firmware_tags_array[@]}"; do
+        if [[ "${i}" == *"${releases_tag_keywords}"* ]]; then
+            firmware_releases_tag="${i}"
+            break
+        fi
+    done
+
+    if [[ -n "${firmware_releases_tag}" ]]; then
+        tolog "02.02.01 Tags: ${firmware_releases_tag}"
+        sleep 2
+    else
+        tolog "02.02.01 No matching tags found." "1"
+    fi
+
+    tolog "02.03 Start searching for firmware download links..."
+
+    # Retrieve the HTML code of the tags list page
+    html_code="$(
+        curl -fsSL -m 10 \
+            https://github.com/${server_firmware_url}/releases/expanded_assets/${firmware_releases_tag}
     )"
-    [[ "${latest_version}" == "null" ]] && tolog "02.01 Invalid OpenWrt download address." "1"
-    latest_updated_at="$(echo ${latest_version} | jq -r '.data')"
-    latest_url="$(echo ${latest_version} | jq -r '.url')"
 
-    # Convert to readable date format
-    date_display_format="$(echo ${latest_updated_at} | tr 'T' '(' | tr 'Z' ')')"
+    # Define regular expressions to match firmware download links and release dates
+    regex_href='href="([^"]+)"'
+    regex_datetime='datetime="([^"]+)"'
+    link_date_results=()
+    while [[ "${html_code}" =~ ${regex_href} ]]; do
+        href="${BASH_REMATCH[1]##*/}"
+        html_code="${html_code#*"${BASH_REMATCH[1]}"}"
+        if [[ "${html_code}" =~ $regex_datetime ]]; then
+            datetime="${BASH_REMATCH[1]}"
+
+            # Search for firmware download links that meet the criteria
+            if [[ "${href}" =~ .*_${BOARD}_.*${main_line_version}\.[0-9]+.*${firmware_suffix} ]] &&
+                [[ ! "${href}" =~ \.sha ]]; then
+                link_date_results+=("${href}@${datetime}")
+            fi
+
+        fi
+    done
+
+    if [[ "${#link_date_results[*]}" -eq "0" ]]; then
+        tolog "02.01 No matching download links found." "1"
+    fi
+
+    # Get the latest version
+    latest_url_date="$(echo "${link_date_results[*]}" | tr ' ' '\n' | sort -urV | head -n 1)"
+    if [[ -n "${latest_url_date}" ]]; then
+        latest_url="$(echo "${latest_url_date}" | awk -F '@' '{print $1}')"
+        latest_updated_at="$(echo "${latest_url_date}" | awk -F '@' '{print $2}')"
+        # Convert to readable date format
+        date_display_format="$(echo ${latest_updated_at} | tr 'T' '(' | tr 'Z' ')')"
+    else
+        tolog "02.02 The search results for releases are empty." "1"
+    fi
 
     # Check the firmware update code
     down_check_code="${latest_updated_at}.${main_line_version}"
     op_release_code="${FIRMWARE_DOWNLOAD_PATH}/.luci-app-amlogic/op_release_code"
-    if [[ -f "${op_release_code}" ]]; then
+    if [[ -s "${op_release_code}" ]]; then
         update_check_code="$(cat ${op_release_code} | xargs)"
         if [[ -n "${update_check_code}" && "${update_check_code}" == "${down_check_code}" ]]; then
             tolog "02.02 Already the latest version, no need to update." "1"
@@ -163,10 +225,10 @@ check_updated() {
     fi
 
     # Prompt to update
-    if [[ "${latest_url}" == "http"* ]]; then
-        tolog '<input type="button" class="cbi-button cbi-button-reload" value="Download" onclick="return b_check_firmware(this, '"'download_${latest_updated_at}@${latest_url##*download/}'"')"/> Latest updated: '${date_display_format}'' "1"
+    if [[ -n "${latest_url}" ]]; then
+        tolog '<input type="button" class="cbi-button cbi-button-reload" value="Download" onclick="return b_check_firmware(this, '"'download_${latest_updated_at}@${firmware_releases_tag}/${latest_url}'"')"/> Latest updated: '${date_display_format}'' "1"
     else
-        tolog "02.03 [${latest_url}] No OpenWrt available, please use another kernel branch." "1"
+        tolog "02.03 No OpenWrt available, please use another kernel branch." "1"
     fi
 
     exit 0
@@ -174,7 +236,7 @@ check_updated() {
 
 # 03. Download Openwrt firmware
 download_firmware() {
-    tolog "03. Download Openwrt firmware ..."
+    tolog "03. Download Openwrt firmware..."
 
     # Get the openwrt firmware download path
     if [[ "${download_version}" == "download_"* ]]; then
@@ -197,32 +259,34 @@ download_firmware() {
     # Restore converted characters in file names(%2B to +)
     firmware_download_oldname="${opfile_path//%2B/+}"
     latest_url="https://github.com/${server_firmware_url}/releases/download/${firmware_download_oldname}"
-    #tolog "${latest_url}"
 
     # Download to OpenWrt file
     firmware_download_name="openwrt_${BOARD}_k${main_line_version}_github${firmware_suffix}"
-    wget "${latest_url}" -q -O "${FIRMWARE_DOWNLOAD_PATH}/${firmware_download_name}"
+    curl -fsSL "${latest_url}" -o "${FIRMWARE_DOWNLOAD_PATH}/${firmware_download_name}"
     if [[ "$?" -eq "0" && -s "${FIRMWARE_DOWNLOAD_PATH}/${firmware_download_name}" ]]; then
         tolog "03.01 OpenWrt downloaded successfully."
     else
         tolog "03.02 OpenWrt download failed." "1"
     fi
 
-    # Download address of sha256sums file
-    shafile_path="$(echo ${opfile_path} | awk -F'/' '{print $1}')"
-    shafile_file="https://github.com/${server_firmware_url}/releases/download/${shafile_path}/sha256sums"
     # Download sha256sums file
-    if wget "${shafile_file}" -q -O "${FIRMWARE_DOWNLOAD_PATH}/sha256sums" 2>/dev/null; then
-        tolog "03.03 Sha256sums downloaded successfully."
-        releases_firmware_sha256sums="$(cat sha256sums | grep ${firmware_download_oldname##*/} | awk '{print $1}')"
-        download_firmware_sha256sums="$(sha256sum ${firmware_download_name} | awk '{print $1}')"
-        [[ -n "${releases_firmware_sha256sums}" && "${releases_firmware_sha256sums}" != "${download_firmware_sha256sums}" ]] && tolog "03.04 The sha256sum check is different." "1"
+    if curl -fsSL "${latest_url}.sha" -o "${FIRMWARE_DOWNLOAD_PATH}/sha256sums" 2>/dev/null; then
+        tolog "03.03 sha file downloaded successfully."
+
+        # If there is a sha256sum file, compare it
+        releases_firmware_sha256sums="$(cat ${FIRMWARE_DOWNLOAD_PATH}/sha256sums | grep ${firmware_download_oldname##*/} | awk '{print $1}')"
+        download_firmware_sha256sums="$(sha256sum ${FIRMWARE_DOWNLOAD_PATH}/${firmware_download_name} | awk '{print $1}')"
+        if [[ -n "${releases_firmware_sha256sums}" && "${releases_firmware_sha256sums}" != "${download_firmware_sha256sums}" ]]; then
+            tolog "03.04 sha256sum verification mismatched." "1"
+        else
+            tolog "03.05 sha256sum verification succeeded."
+        fi
     fi
+
     sync && sleep 3
 
     tolog "You can update."
 
-    #echo '<a href="javascript:;" onclick="return amlogic_update(this, '"'${firmware_download_name}'"')">Update</a>' >$START_LOG
     tolog '<input type="button" class="cbi-button cbi-button-reload" value="Update" onclick="return amlogic_update(this, '"'${firmware_download_name}@${down_check_code}@${FIRMWARE_DOWNLOAD_PATH}'"')"/>' "1"
 
     exit 0
